@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.PaiGateway" parent="android:Theme.Material.NoActionBar" />
+</resources>

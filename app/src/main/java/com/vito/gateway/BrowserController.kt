@@ -1,0 +1,208 @@
+package com.vito.gateway
+
+import android.annotation.SuppressLint
+import android.os.Handler
+import android.os.Looper
+import android.webkit.WebView
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
+/**
+ * 內建瀏覽器（WebView）+ 自動化。對應桌面 gateway 的 browser_control。
+ *
+ * 設計重點（和桌面同思路）：
+ * - snapshot 用 JS 掃描可互動元素（含 cursor:pointer 的 React div、同源 iframe），每個給 [eN] + 座標。
+ * - 點擊/輸入用「在座標 elementFromPoint 派發完整事件序列」，對 React/SPA 有效；
+ *   輸入用 React 相容的 native value setter + input/change 事件（受控元件才吃得到）。
+ * - WebView 操作必須在主執行緒；server 在背景執行緒 → 用 Handler.post + CountDownLatch 同步取回結果。
+ */
+object BrowserController {
+    @SuppressLint("StaticFieldLeak")
+    @Volatile private var webView: WebView? = null
+    private val main = Handler(Looper.getMainLooper())
+
+    fun attach(wv: WebView) { webView = wv }
+    fun isReady() = webView != null
+
+    /** 在主執行緒同步執行 WebView 動作並取回字串結果（背景 server thread 呼叫）。 */
+    private fun <T> onMain(timeoutSec: Long = 20, block: (WebView, (T) -> Unit) -> Unit): T? {
+        val wv = webView ?: return null
+        val latch = CountDownLatch(1)
+        @Suppress("UNCHECKED_CAST")
+        var result: T? = null
+        main.post {
+            try {
+                block(wv) { r -> result = r; latch.countDown() }
+            } catch (e: Throwable) {
+                latch.countDown()
+            }
+        }
+        latch.await(timeoutSec, TimeUnit.SECONDS)
+        return result
+    }
+
+    private fun evalJs(js: String, timeoutSec: Long = 20): String {
+        val r = onMain<String>(timeoutSec) { wv, done ->
+            wv.evaluateJavascript(js) { value -> done(value ?: "null") }
+        }
+        return unquote(r ?: "null")
+    }
+
+    // evaluateJavascript 回的是 JSON 字串（被引號包起來）→ 還原
+    private fun unquote(s: String): String {
+        return try {
+            if (s.startsWith("\"")) JSONArray("[$s]").getString(0) else s
+        } catch (e: Throwable) { s }
+    }
+
+    fun navigate(url0: String): String {
+        var url = url0.trim()
+        if (url.isNotEmpty() && !Regex("^(https?|about|data|file):").containsMatchIn(url)) url = "https://$url"
+        onMain<Unit>(30) { wv, done -> wv.loadUrl(url); done(Unit) }
+        // 等頁面 + SPA hydrate
+        Thread.sleep(2500)
+        return "已開啟 ${currentUrl()}\n\n" + snapshot()
+    }
+
+    fun currentUrl(): String = onMain<String>(5) { wv, done -> done(wv.url ?: "") } ?: ""
+
+    fun back(): String {
+        onMain<Unit>(10) { wv, done -> if (wv.canGoBack()) wv.goBack(); done(Unit) }
+        Thread.sleep(1200)
+        return "已返回 ${currentUrl()}\n\n" + snapshot()
+    }
+
+    /** 掃描可互動元素，回給 AI 的清單（含 [eN] 編號）。元素過少自動重抓（SPA 慢）。 */
+    fun snapshot(): String {
+        var json = "{}"
+        for (attempt in 0 until 4) {
+            json = evalJs(JS_SNAPSHOT)
+            val n = try { JSONObject(json).getJSONArray("elements").length() } catch (e: Throwable) { 0 }
+            if (n >= 5 || attempt == 3) break
+            Thread.sleep(1500)
+        }
+        return formatSnapshot(json)
+    }
+
+    private fun formatSnapshot(json: String): String {
+        return try {
+            val o = JSONObject(json)
+            val els = o.getJSONArray("elements")
+            val sb = StringBuilder()
+            sb.append("頁面：").append(o.optString("title")).append("\n")
+            sb.append("網址：").append(o.optString("url")).append("\n")
+            sb.append("可互動元素（共 ").append(els.length()).append(" 個）：\n")
+            for (i in 0 until els.length()) {
+                val e = els.getJSONObject(i)
+                sb.append("  [").append(e.getString("ref")).append("] ").append(e.optString("role"))
+                val type = e.optString("type")
+                if (type.isNotEmpty()) sb.append("/").append(type)
+                val nm = e.optString("name")
+                if (nm.isNotEmpty()) sb.append(" \"").append(nm).append("\"")
+                sb.append("\n")
+            }
+            sb.toString().take(5000)
+        } catch (e: Throwable) { "（頁面解析失敗）\n網址：${currentUrl()}" }
+    }
+
+    fun click(target: String): String {
+        val js = "window.__gwClick(" + JSONObject.quote(target) + ")"
+        val r = evalJs(js)
+        Thread.sleep(700)
+        return if (r.startsWith("OK")) "已點擊「$target」\n\n" + snapshot()
+        else "⚠️ 點擊「$target」失敗（$r）——請依下方當前畫面重選目標：\n\n" + snapshot()
+    }
+
+    fun type(target: String, text: String, submit: Boolean): String {
+        val js = "window.__gwType(" + JSONObject.quote(target) + "," + JSONObject.quote(text) + "," + submit + ")"
+        val r = evalJs(js)
+        Thread.sleep(if (submit) 900 else 300)
+        return if (r.startsWith("OK")) "已輸入「$text」${if (submit) "並送出" else ""}\n\n" + snapshot()
+        else "⚠️ 輸入失敗（$r）——請依下方當前畫面重選輸入框：\n\n" + snapshot()
+    }
+
+    fun readText(): String {
+        val t = evalJs("(function(){var t=document.body?document.body.innerText:'';return (t||'').replace(/\\s+/g,' ').trim().slice(0,6000);})()")
+        return "頁面：${currentUrl()}\n\n$t"
+    }
+}
+
+// ── 注入 WebView 的自動化 JS（snapshot / click / type）────────────────────────
+private const val JS_SNAPSHOT = """
+(function(){
+  try{
+  document.querySelectorAll('[data-gwref]').forEach(function(e){e.removeAttribute('data-gwref');});
+  var out=[],seen={},i=0;
+  var sel='a,button,input,textarea,select,[role=button],[role=link],[role=tab],[role=checkbox],[role=menuitem],[role=combobox],[role=option],[role=textbox],[onclick],[contenteditable=true],[tabindex]';
+  function collect(doc){
+    var cand=[].slice.call(doc.querySelectorAll(sel));
+    var all=doc.querySelectorAll('div,span,li,label');
+    for(var k=0;k<all.length;k++){try{var el=all[k];if(getComputedStyle(el).cursor==='pointer'){var tx=(el.innerText||'').trim();if(tx&&tx.length<=40)cand.push(el);}}catch(e){}}
+    for(var j=0;j<cand.length;j++){
+      var el=cand[j];var r=el.getBoundingClientRect();
+      if(r.width<1||r.height<1)continue;
+      var st=getComputedStyle(el);if(st.visibility==='hidden'||st.display==='none'||st.opacity==='0')continue;
+      var cx=r.left+r.width/2,cy=r.top+r.height/2;
+      if(cx<0||cy<0||cx>innerWidth||cy>innerHeight)continue;
+      var role=el.getAttribute('role')||el.tagName.toLowerCase();
+      var name=(el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.value||el.innerText||el.getAttribute('title')||'').trim().replace(/\s+/g,' ').slice(0,80);
+      if(!name&&el.tagName==='INPUT')name='('+(el.type||'text')+')';
+      var key=role+'|'+name+'|'+Math.round(r.top);if(seen[key])continue;seen[key]=1;
+      i++;el.setAttribute('data-gwref','e'+i);
+      out.push({ref:'e'+i,role:role,name:name,type:el.type||'',cx:Math.round(cx),cy:Math.round(cy)});
+      if(out.length>=120)break;
+    }
+  }
+  collect(document);
+  var ifr=document.querySelectorAll('iframe');
+  for(var f=0;f<ifr.length;f++){try{if(ifr[f].contentDocument)collect(ifr[f].contentDocument);}catch(e){}}
+  return JSON.stringify({url:location.href,title:document.title,elements:out});
+  }catch(e){return JSON.stringify({url:location.href,title:document.title,elements:[],err:String(e)});}
+})()
+"""
+
+// click/type 安裝到 window，snapshot 後可用 ref/文字/座標定位並派發真實事件序列
+private const val JS_HELPERS = """
+(function(){
+  function norm(s){return (s||'').replace(/[\s,，、.。()（）\-\/]+/g,'');}
+  function find(target){
+    var t=(target||'').trim();
+    var byref=document.querySelector('[data-gwref="'+t+'"]');if(byref)return byref;
+    // 跨 iframe 找 ref
+    var ifr=document.querySelectorAll('iframe');
+    for(var f=0;f<ifr.length;f++){try{var d=ifr[f].contentDocument;if(d){var r=d.querySelector('[data-gwref="'+t+'"]');if(r)return r;}}catch(e){}}
+    // 文字模糊比對（含機場代碼）
+    var nt=norm(t),code=(t.match(/\b[A-Z]{3}\b/)||[])[0],best=null;
+    var nodes=[].slice.call(document.querySelectorAll('[data-gwref]'));
+    for(var f2=0;f2<ifr.length;f2++){try{var d2=ifr[f2].contentDocument;if(d2)nodes=nodes.concat([].slice.call(d2.querySelectorAll('[data-gwref]')));}catch(e){}}
+    for(var i=0;i<nodes.length;i++){var el=nodes[i];var nm=(el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.value||el.innerText||'').trim();var nn=norm(nm);
+      if(nn===nt)return el;
+      if(code&&nm.indexOf(code)>=0)return el;
+      if(nt&&(nn.indexOf(nt)>=0||nt.indexOf(nn)>=0))best=best||el;}
+    return best;
+  }
+  function fire(el,type){var ev=new MouseEvent(type,{bubbles:true,cancelable:true,view:window});el.dispatchEvent(ev);}
+  window.__gwClick=function(target){
+    var el=find(target);if(!el)return 'not-found';
+    try{el.scrollIntoView({block:'center'});}catch(e){}
+    try{fire(el,'pointerdown');fire(el,'mousedown');fire(el,'pointerup');fire(el,'mouseup');fire(el,'click');}catch(e){return 'err:'+e;}
+    return 'OK';
+  };
+  window.__gwType=function(target,text,submit){
+    var el=find(target);if(!el)return 'not-found';
+    try{el.scrollIntoView({block:'center'});el.focus();
+      var proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
+      var setter=Object.getOwnPropertyDescriptor(proto,'value');
+      if(setter&&setter.set)setter.set.call(el,text);else el.value=text;
+      el.dispatchEvent(new Event('input',{bubbles:true}));
+      el.dispatchEvent(new Event('change',{bubbles:true}));
+      if(submit){var f=el.form;el.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:'Enter',keyCode:13,which:13}));el.dispatchEvent(new KeyboardEvent('keyup',{bubbles:true,key:'Enter',keyCode:13,which:13}));if(f&&f.requestSubmit)try{f.requestSubmit();}catch(e){}}
+    }catch(e){return 'err:'+e;}
+    return 'OK';
+  };
+})()
+"""
+
+object BrowserJs { const val HELPERS = JS_HELPERS }
