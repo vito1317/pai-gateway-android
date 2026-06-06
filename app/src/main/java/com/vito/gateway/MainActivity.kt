@@ -123,7 +123,8 @@ fun GatewayTab() {
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun VoiceTab() {
-    val prefs = remember { Prefs(LocalContext.current) }
+    val ctx = LocalContext.current
+    val prefs = remember { Prefs(ctx) }
     AndroidView(modifier = Modifier.fillMaxSize(), factory = { c ->
         WebView(c).apply {
             settings.javaScriptEnabled = true
