@@ -91,12 +91,26 @@ object VoiceEngine {
             }
             s.on("stop_tts") { stopPlayback() }
             s.on("ai_text") { args -> transcript.value = args.getOrNull(0)?.toString() ?: "" }
-            s.on("user_transcript") { args -> userText.value = args.getOrNull(0)?.toString() ?: "" }
-            s.on("agent_step") { args -> steps.value = args.getOrNull(0)?.toString() ?: "" }
+            s.on("user_transcript") { args ->
+                // 新的一輪使用者輸入 → 清空上一輪的處理序列
+                userText.value = args.getOrNull(0)?.toString() ?: ""
+                steps.value = ""
+            }
+            s.on("agent_step") { args -> appendStep(args.getOrNull(0)?.toString() ?: "") }
             s.connect()
         } catch (e: Throwable) {
             status.value = "錯誤：${e.message}"; active.value = false
         }
+    }
+
+    /** 累積處理序列：每步一行、去掉連續重複、最多保留最近 12 步。 */
+    private fun appendStep(step: String) {
+        val s = step.trim()
+        if (s.isEmpty()) return
+        val lines = steps.value.split("\n").filter { it.isNotBlank() }.toMutableList()
+        if (lines.lastOrNull() == s) return   // 與上一步相同就不重複
+        lines.add(s)
+        steps.value = lines.takeLast(12).joinToString("\n")
     }
 
     fun stop() {

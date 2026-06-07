@@ -518,12 +518,26 @@ fun VoiceTab() {
 
         // 字幕區（佔剩餘空間、可上下滑；內容更新自動捲到最新）
         val scroll = rememberScrollState()
-        LaunchedEffect(VoiceEngine.transcript.value) { scroll.animateScrollTo(scroll.maxValue) }
+        LaunchedEffect(VoiceEngine.transcript.value, VoiceEngine.steps.value) { scroll.animateScrollTo(scroll.maxValue) }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll)) {
-            if (VoiceEngine.steps.value.isNotEmpty())
-                Text(VoiceEngine.steps.value, color = CyberCyan.copy(alpha = 0.7f), fontSize = 11.sp)
+            // 處理序列：AI 正在做的每一步（查資料、開瀏覽器、讀結果…）即時逐行顯示
+            val stepText = VoiceEngine.steps.value
+            if (stepText.isNotEmpty()) {
+                Column(
+                    Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(CyberSurface.copy(alpha = 0.6f))
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text("處理序列", color = CyberCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    stepText.split("\n").forEach { line ->
+                        Text("· $line", color = CyberCyan.copy(alpha = 0.75f), fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 3.dp))
+                    }
+                }
+            }
             if (VoiceEngine.userText.value.isNotEmpty())
-                Text("你：${VoiceEngine.userText.value}", color = CyberGray, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                Text("你：${VoiceEngine.userText.value}", color = CyberGray, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
             if (VoiceEngine.transcript.value.isNotEmpty())
                 Text(renderMarkdown(VoiceEngine.transcript.value), color = Color.White, fontSize = 15.sp,
                     modifier = Modifier.padding(top = 6.dp))

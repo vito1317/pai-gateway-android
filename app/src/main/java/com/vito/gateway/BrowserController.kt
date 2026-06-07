@@ -53,6 +53,27 @@ object BrowserController {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         view?.evaluateJavascript(BrowserJs.HELPERS, null)
                     }
+                    // 攔非 http(s) scheme：Google Maps 等會重導向 intent:// 想喚起 App，
+                    // WebView 不認得 → net::ERR_UNKNOWN_URL_SCHEME。自動化要留在頁面內，
+                    // 所以把 intent:// 還原成 https 繼續在 WebView 載入；其他外部 scheme 直接擋掉不當機。
+                    override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
+                        val u = request?.url?.toString() ?: return false
+                        if (u.startsWith("http://") || u.startsWith("https://")) return false
+                        try {
+                            if (u.startsWith("intent://")) {
+                                val it = android.content.Intent.parseUri(u, android.content.Intent.URI_INTENT_SCHEME)
+                                val fb = it.getStringExtra("browser_fallback_url")
+                                val data = it.dataString
+                                val target = when {
+                                    !fb.isNullOrBlank() && fb.startsWith("http") -> fb
+                                    data != null && data.startsWith("http") -> data
+                                    else -> "https://" + u.substringAfter("intent://").substringBefore("#Intent")
+                                }
+                                view?.loadUrl(target)
+                            }
+                        } catch (_: Throwable) {}
+                        return true   // intent://、market://、tel: 等一律不交給 WebView 載入（避免錯誤頁）
+                    }
                 }
                 // 手動量測+佈局：背景（未 attach 到畫面）時也有尺寸 → getBoundingClientRect 座標有效
                 val wSpec = android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY)
