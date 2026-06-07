@@ -103,7 +103,7 @@ class MainActivity : ComponentActivity() {
 
     private fun requestRuntimePerms() {
         val want = mutableListOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA,
-            Manifest.permission.ACCESS_FINE_LOCATION)
+            Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.CALL_PHONE, Manifest.permission.READ_CONTACTS)
         if (Build.VERSION.SDK_INT >= 33) want.add(Manifest.permission.POST_NOTIFICATIONS)
         val missing = want.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) {
@@ -174,7 +174,31 @@ fun RootScreen() {
         }
     }
 
-    /** 操作瀏覽器時右下角的語音迷你卡：迷你能量球 + 即時狀態 + 最新處理步驟 + AI 回覆摘要。 */
+    // show_document / 點通知 → 自動彈出完整內容（markdown、可滑、可開連結/分享）
+    if (GatewayState.noticeText.value.isNotEmpty()) {
+        val ctx = LocalContext.current
+        val url = GatewayState.noticeUrl.value
+        AlertDialog(
+            onDismissRequest = { GatewayState.noticeText.value = "" },
+            confirmButton = { TextButton(onClick = { GatewayState.noticeText.value = "" }) { Text("關閉", color = CyberCyan) } },
+            dismissButton = {
+                Row {
+                    if (url.isNotEmpty()) TextButton(onClick = { DeviceTools.openUrlPublic(ctx, url) }) { Text("開啟連結", color = CyberCyan) }
+                    TextButton(onClick = { DeviceTools.shareText(ctx, GatewayState.noticeText.value) }) { Text("分享", color = CyberGray) }
+                }
+            },
+            title = { Text("📋 ${GatewayState.noticeTitle.value}", color = CyberCyan) },
+            text = {
+                Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
+                    Text(renderMarkdown(GatewayState.noticeText.value), color = Color.White, fontSize = 14.sp)
+                }
+            },
+            containerColor = CyberSurface
+        )
+    }
+}
+
+/** 操作瀏覽器時右下角的語音迷你卡：迷你能量球 + 即時狀態 + 最新處理步驟 + AI 回覆摘要。 */
 @Composable
 fun VoiceMiniOverlay(onTap: () -> Unit, modifier: Modifier = Modifier) {
     val speaking = VoiceEngine.speaking.value
@@ -215,30 +239,6 @@ fun VoiceMiniOverlay(onTap: () -> Unit, modifier: Modifier = Modifier) {
         if (ai.isNotEmpty())
             Text(ai, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp,
                 maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
-    }
-}
-
-// show_document / 點通知 → 自動彈出完整內容（markdown、可滑、可開連結/分享）
-    if (GatewayState.noticeText.value.isNotEmpty()) {
-        val ctx = LocalContext.current
-        val url = GatewayState.noticeUrl.value
-        AlertDialog(
-            onDismissRequest = { GatewayState.noticeText.value = "" },
-            confirmButton = { TextButton(onClick = { GatewayState.noticeText.value = "" }) { Text("關閉", color = CyberCyan) } },
-            dismissButton = {
-                Row {
-                    if (url.isNotEmpty()) TextButton(onClick = { DeviceTools.openUrlPublic(ctx, url) }) { Text("開啟連結", color = CyberCyan) }
-                    TextButton(onClick = { DeviceTools.shareText(ctx, GatewayState.noticeText.value) }) { Text("分享", color = CyberGray) }
-                }
-            },
-            title = { Text("📋 ${GatewayState.noticeTitle.value}", color = CyberCyan) },
-            text = {
-                Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
-                    Text(renderMarkdown(GatewayState.noticeText.value), color = Color.White, fontSize = 14.sp)
-                }
-            },
-            containerColor = CyberSurface
-        )
     }
 }
 

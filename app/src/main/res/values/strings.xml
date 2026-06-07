@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">PAI Gateway</string>
+    <string name="accessibility_desc">讓 PAI 助理讀取畫面並代你點擊/輸入/滑動，以語音操作任何 App（LINE 等）。</string>
 </resources>

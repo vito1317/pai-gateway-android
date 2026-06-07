@@ -198,6 +198,45 @@ object DeviceTools {
         } catch (e: Throwable) { "開啟失敗：${e.message}" }
     }
 
+    /** 撥打電話：to 可以是號碼或聯絡人名稱（自動查通訊錄）。
+     *  有 CALL_PHONE 權限 → 直接撥出；沒有 → 開撥號畫面帶好號碼（按一下撥出）。 */
+    fun phoneCall(ctx: Context, to: String): String {
+        val target = to.trim()
+        if (target.isEmpty()) return "請提供電話號碼或聯絡人名稱"
+        val digits = target.count { it.isDigit() }
+        val number = if (digits >= 3) target.filter { it.isDigit() || it == '+' || it == '#' || it == '*' }
+        else lookupContact(ctx, target) ?: return "通訊錄找不到「$target」（或未授權讀取聯絡人）"
+        return try {
+            val uri = android.net.Uri.parse("tel:$number")
+            val canCall = androidx.core.content.ContextCompat.checkSelfPermission(
+                ctx, android.Manifest.permission.CALL_PHONE
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ui {
+                try {
+                    ctx.startActivity(Intent(if (canCall) Intent.ACTION_CALL else Intent.ACTION_DIAL, uri)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (_: Throwable) {
+                    try { ctx.startActivity(Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Throwable) {}
+                }
+            }
+            val who = if (number != target) "$target（$number）" else number
+            if (canCall) "正在撥打 $who" else "已開啟撥號畫面：$who（請按撥出鍵）"
+        } catch (e: Throwable) { "撥打失敗：${e.message}" }
+    }
+
+    /** 依名稱查通訊錄電話（模糊比對 display name，取第一筆）。 */
+    private fun lookupContact(ctx: Context, name: String): String? {
+        return try {
+            val p = android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+            ctx.contentResolver.query(
+                p,
+                arrayOf(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER),
+                "${android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
+                arrayOf("%$name%"), null
+            )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        } catch (_: Throwable) { null }
+    }
+
     /** 播放音樂：用 Android 標準「依搜尋播放」intent 叫起預設音樂 App（YouTube Music/Spotify）直接播；
      *  沒有 App 接手就退回開 YouTube 搜尋。query 留空＝開 YouTube Music 首頁。 */
     fun playMusic(ctx: Context, query: String): String {

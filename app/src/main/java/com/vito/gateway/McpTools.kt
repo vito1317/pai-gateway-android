@@ -48,6 +48,18 @@ object McpTools {
         tool("vibrate", "讓手機震動。", JSONObject().put("ms", n("毫秒，預設500")))
         tool("battery_status", "查手機電量與充電狀態。", JSONObject())
         tool("open_app", "開啟手機上的 app（LINE/YouTube/地圖/Chrome/Spotify/設定/相機…）。", JSONObject().put("name", s("app 名稱")), JSONArray().put("name"))
+        tool("phone_call", "用手機撥打電話。to=電話號碼或聯絡人名稱（會自動查通訊錄）。有授權直接撥出，否則開撥號畫面帶好號碼。",
+            JSONObject().put("to", s("電話號碼或聯絡人名稱")), JSONArray().put("to"))
+        tool("notifications_list", "讀取手機最近通知（LINE/訊息等，最多15則，標示哪些可直接回覆）。需開啟「通知存取」權限（未開會自動帶去設定頁）。", JSONObject())
+        tool("notification_reply", "直接回覆通知訊息（如 LINE，不用打開 App）。target=App名或通知標題關鍵字（如 LINE 或對方名字）；message=回覆內容。先用 notifications_list 確認有可回覆的通知。",
+            JSONObject().put("target", s("App名或通知標題關鍵字")).put("message", s("回覆內容")), JSONArray().put("target").put("message"))
+        tool("screen_snapshot", "讀取手機目前畫面的可互動元素清單（[sN] 編號＋文字，任何 App 都行）。操作 LINE 等手機 App 的起點（先 open_app 再 snapshot）。需開啟「協助工具」權限。", JSONObject())
+        tool("screen_click", "點擊手機畫面元素。target=sN 編號（最準）或可見文字。", JSONObject().put("target", s("sN 或可見文字")), JSONArray().put("target"))
+        tool("screen_type", "在手機畫面輸入框輸入文字。target=sN 或文字（會先點它聚焦，可留空=目前焦點）；text=要輸入的內容。",
+            JSONObject().put("target", s("sN 或文字，可空")).put("text", s("輸入內容")), JSONArray().put("text"))
+        tool("screen_swipe", "滑動手機畫面。direction=up/down/left/right（up=往上滑看更多）。", JSONObject().put("direction", s("up|down|left|right")), JSONArray().put("direction"))
+        tool("screen_back", "按手機返回鍵。", JSONObject())
+        tool("screen_home", "回手機主畫面。", JSONObject())
         tool("play_music", "在手機播放音樂：叫起預設音樂 App（YouTube Music/Spotify）直接播。query=歌名/歌手；留空=開 YouTube Music。",
             JSONObject().put("query", s("歌名或歌手")))
         tool("media_control", "控制手機媒體播放（對任何在播的音樂 App 有效）：pause/play/next/previous。",
@@ -93,6 +105,35 @@ object McpTools {
             "open_app" -> DeviceTools.openApp(ctx, args.optString("name"))
             "play_music" -> DeviceTools.playMusic(ctx, args.optString("query"))
             "media_control" -> DeviceTools.mediaControl(ctx, args.optString("action"))
+            "phone_call" -> DeviceTools.phoneCall(ctx, args.optString("to"))
+            "notifications_list" -> {
+                if (!NotificationListener.isEnabled(ctx)) {
+                    NotificationListener.openSettings(ctx)
+                    "尚未開啟「通知存取」——已開啟設定頁，請啟用「PAI Gateway 通知存取」後再試一次"
+                } else NotificationListener.recent.take(15)
+                    .joinToString("\n") { n -> "[${n.app}] ${n.title}：${n.text}" + (if (n.canReply) "（可回覆）" else "") }
+                    .ifEmpty { "（最近沒有收到通知）" }
+            }
+            "notification_reply" -> {
+                val inst = NotificationListener.instance
+                if (inst == null) {
+                    NotificationListener.openSettings(ctx)
+                    "通知存取未連接——已開啟設定頁，請啟用「PAI Gateway 通知存取」後再試"
+                } else {
+                    val t = args.optString("target"); val msg = args.optString("message")
+                    val note = NotificationListener.recent.firstOrNull {
+                        (it.app.contains(t, true) || it.title.contains(t, true) || it.text.contains(t, true)) && it.canReply
+                    }
+                    if (note == null) "找不到可回覆的「$t」通知（先用 notifications_list 看清單）"
+                    else inst.reply(note.key, msg).also { GatewayState.log("回覆 ${note.app}/${note.title}：$it") }
+                }
+            }
+            "screen_snapshot" -> PhoneAccessibilityService.instance?.snapshot() ?: accNeed(ctx)
+            "screen_click" -> PhoneAccessibilityService.instance?.click(args.optString("target")) ?: accNeed(ctx)
+            "screen_type" -> PhoneAccessibilityService.instance?.type(args.optString("target"), args.optString("text")) ?: accNeed(ctx)
+            "screen_swipe" -> PhoneAccessibilityService.instance?.swipe(args.optString("direction")) ?: accNeed(ctx)
+            "screen_back" -> PhoneAccessibilityService.instance?.back() ?: accNeed(ctx)
+            "screen_home" -> PhoneAccessibilityService.instance?.home() ?: accNeed(ctx)
             "maps_route" -> DeviceTools.mapsRoute(ctx, args.optString("origin"), args.optString("destination"), args.optString("waypoints"), args.optString("mode"))
             "share_text" -> DeviceTools.shareText(ctx, args.optString("text"))
             "phone_speak" -> DeviceTools.speak(ctx, args.optString("text"))
@@ -108,6 +149,12 @@ object McpTools {
             }
             else -> throw IllegalArgumentException("unknown tool: $name")
         }
+    }
+
+    /** 輔助使用未開啟 → 帶使用者去設定頁。 */
+    private fun accNeed(ctx: Context): String {
+        PhoneAccessibilityService.openSettings(ctx)
+        return "尚未開啟「協助工具（輔助使用）」權限——已開啟設定頁，請啟用「PAI Gateway 螢幕操作」後再試"
     }
 
     private fun openUrl(ctx: Context, url: String): String {
