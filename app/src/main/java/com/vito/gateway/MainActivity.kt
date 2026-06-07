@@ -82,7 +82,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestRuntimePerms() {
-        val want = mutableListOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
+        val want = mutableListOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA,
+            Manifest.permission.ACCESS_FINE_LOCATION)
         if (Build.VERSION.SDK_INT >= 33) want.add(Manifest.permission.POST_NOTIFICATIONS)
         val missing = want.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) {
@@ -100,6 +101,16 @@ enum class NavItem(val label: String, val icon: ImageVector) {
 @Composable
 fun RootScreen() {
     var selectedItem by remember { mutableStateOf(NavItem.Node) }
+
+    // 工具呼叫（browser_*）請求切到瀏覽器分頁時自動切換（語音仍在背景跑）
+    LaunchedEffect(GatewayState.requestTab.value) {
+        when (GatewayState.requestTab.value) {
+            "browser" -> selectedItem = NavItem.Browser
+            "voice" -> selectedItem = NavItem.Voice
+            "node" -> selectedItem = NavItem.Node
+        }
+        if (GatewayState.requestTab.value.isNotEmpty()) GatewayState.requestTab.value = ""
+    }
 
     Scaffold(
         bottomBar = {
@@ -412,8 +423,7 @@ fun VoiceTab() {
     val active = VoiceEngine.active.value
     val speaking = VoiceEngine.speaking.value
     val vol = VoiceEngine.volume.value
-
-    DisposableEffect(Unit) { onDispose { VoiceEngine.stop() } }
+    // 注意：不在 onDispose 停止語音——切到瀏覽器分頁時語音要繼續在背景跑
 
     // 能量球脈動
     val infinite = rememberInfiniteTransition(label = "orb")
@@ -421,11 +431,23 @@ fun VoiceTab() {
         initialValue = 0.92f, targetValue = 1.08f,
         animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse"
     )
-    val orbScale = if (active) (1f + vol * 1.5f).coerceAtMost(1.6f) * pulse else 1f
+    val userSpeaking = active && !speaking && vol > 0.045f   // 偵測使用者正在說話
+    val orbScale = when {
+        speaking -> 1.15f * pulse                            // AI 回應：穩定脈動
+        active -> (1f + vol * 2.2f).coerceAtMost(1.7f)       // 聆聽：隨音量即時放大（語音輸入回饋）
+        else -> 1f
+    }
     val orbColor = when {
-        speaking -> CyberPurple
-        active -> CyberCyan
-        else -> CyberGray
+        speaking -> CyberPurple        // AI 回應中（紫）
+        userSpeaking -> Color(0xFF22D3EE) // 使用者說話中（亮青）
+        active -> CyberCyan            // 聆聽中
+        else -> CyberGray              // 停止
+    }
+    val phase = when {
+        speaking -> "🔊 回應中…"
+        userSpeaking -> "🎤 聆聽中…"
+        active -> "● 已連線 · 請說話"
+        else -> VoiceEngine.status.value
     }
 
     Column(
@@ -441,15 +463,20 @@ fun VoiceTab() {
         }
 
         Spacer(Modifier.weight(1f))
-        // 能量球
-        Box(Modifier.size(180.dp), contentAlignment = Alignment.Center) {
+        // 能量球（隨語音輸入即時脈動 = 語音輸入回饋）
+        Box(Modifier.size(200.dp), contentAlignment = Alignment.Center) {
+            // 說話時的外環光暈
+            if (userSpeaking || speaking) {
+                Box(Modifier.size((160 + vol * 240).dp.coerceAtMost(200.dp)).clip(CircleShape)
+                    .background(orbColor.copy(alpha = 0.12f)))
+            }
             Box(
                 Modifier.size(150.dp).scale(orbScale).clip(CircleShape)
-                    .background(Brush.radialGradient(listOf(orbColor.copy(alpha = 0.9f), orbColor.copy(alpha = 0.15f))))
+                    .background(Brush.radialGradient(listOf(orbColor.copy(alpha = 0.95f), orbColor.copy(alpha = 0.15f))))
             )
         }
         Spacer(Modifier.height(16.dp))
-        Text(VoiceEngine.status.value, color = CyberGray, fontSize = 13.sp)
+        Text(phase, color = if (userSpeaking) Color(0xFF22D3EE) else CyberGray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.weight(0.4f))
 
         // 字幕
