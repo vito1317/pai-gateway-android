@@ -10,6 +10,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -26,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
@@ -75,6 +78,15 @@ fun GatewayTab() {
     var node by remember { mutableStateOf(prefs.nodeName) }
     var pairCode by remember { mutableStateOf("") }
 
+    // QR 掃描配對：掃到的字串即配對碼 → 套用並啟動
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { res ->
+        val c = res.contents
+        if (!c.isNullOrBlank()) {
+            if (applyPairCode(c, prefs)) { paiBase = prefs.paiBase; token = prefs.registerToken; pairWithStart(ctx, prefs) }
+            else GatewayState.log("QR 內容不是有效配對碼")
+        }
+    }
+
     Column(Modifier.fillMaxSize().padding(14.dp)) {
         Text("PAI Gateway · Android", fontSize = 20.sp)
         Spacer(Modifier.height(6.dp))
@@ -83,17 +95,30 @@ fun GatewayTab() {
         StatusRow("註冊", GatewayState.regStatus.value)
 
         Spacer(Modifier.height(10.dp))
-        // 一鍵配對：貼上 PAI 後台的「配對碼」自動填好設定
-        OutlinedTextField(pairCode, { pairCode = it },
-            label = { Text("配對碼（PAI 後台複製）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        // 掃描 QR 一鍵配對（PAI 開 /api/gateway/pair-code 顯示 QR）
         Button(
+            onClick = {
+                scanLauncher.launch(ScanOptions().apply {
+                    setPrompt("掃描 PAI 配對 QR")
+                    setBeepEnabled(false)
+                    setOrientationLocked(false)
+                    setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                })
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("📷 掃描 QR 一鍵配對") }
+
+        // 或貼上配對碼
+        OutlinedTextField(pairCode, { pairCode = it },
+            label = { Text("或貼上配對碼") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+        OutlinedButton(
             onClick = {
                 val ok = applyPairCode(pairCode, prefs)
                 if (ok) { paiBase = prefs.paiBase; token = prefs.registerToken; pairWithStart(ctx, prefs) }
                 else GatewayState.log("配對碼格式不正確")
             },
-            modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-        ) { Text("🔗 一鍵配對並啟動") }
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("🔗 配對並啟動") }
 
         Spacer(Modifier.height(12.dp))
         Text("或手動設定：", fontSize = 12.sp)

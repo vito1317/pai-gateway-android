@@ -53,4 +53,6 @@ dependencies {
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     // JSON
     implementation("org.json:json:20240303")
+    // QR 掃描配對
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }
