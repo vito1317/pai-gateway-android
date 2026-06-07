@@ -84,6 +84,8 @@ object McpTools {
             BrowserController.ensureWebView(ctx)
             GatewayState.requestTab.value = "browser"
         }
+        // AI 操作手機（畫面操作/開 App/地圖/電話/通知…）→ 全螢幕懸浮框即時顯示進度
+        overlayLabel(name, args)?.let { ControlOverlay.show(ctx, it) }
         return when (name) {
             "browser_navigate" -> BrowserController.navigate(args.optString("url"))
             "browser_snapshot" -> BrowserController.snapshot()
@@ -153,6 +155,24 @@ object McpTools {
             }
             else -> throw IllegalArgumentException("unknown tool: $name")
         }
+    }
+
+    /** 各「操作手機」工具對應的浮框進度文字；非操作類（純查詢）回 null 不顯示。 */
+    private fun overlayLabel(name: String, args: JSONObject): String? = when (name) {
+        "screen_snapshot" -> "👁 讀取畫面…"
+        "screen_click" -> "👆 點擊：${args.optString("target")}"
+        "screen_type" -> "⌨️ 輸入：${args.optString("text").take(20)}"
+        "screen_swipe" -> "↕️ 滑動畫面"
+        "screen_back" -> "↩️ 返回"
+        "screen_home" -> "🏠 回主畫面"
+        "screen_shot" -> "📸 截圖判讀"
+        "open_app" -> "🚀 開啟：${args.optString("name")}"
+        "maps_route" -> "🗺️ 開啟地圖路線"
+        "phone_call" -> "📞 撥打：${args.optString("to")}"
+        "notification_reply" -> "💬 回覆訊息"
+        "play_music" -> "🎵 播放音樂"
+        "open_url" -> "🌐 開啟連結"
+        else -> null
     }
 
     /** 輔助使用服務未連接 → 區分「沒開」與「開了但服務沒連上（常見於小米/HyperOS 把它殺掉）」。 */

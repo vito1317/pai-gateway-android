@@ -204,6 +204,7 @@ fun PermissionCenter(ctx: android.content.Context) {
     val notiOn = NotificationListener.isEnabled(ctx)
     val accOn = PhoneAccessibilityService.isEnabled(ctx)
     val writeOn = android.provider.Settings.System.canWrite(ctx)
+    val overlayOn = ControlOverlay.canDraw(ctx)
 
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(CyberSurface).padding(14.dp)
@@ -213,6 +214,7 @@ fun PermissionCenter(ctx: android.content.Context) {
             color = CyberGray, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
         PermRow("通知存取（讀取/回覆 LINE 等通知）", notiOn) { NotificationListener.openSettings(ctx) }
         PermRow("協助工具（讀畫面＋點擊操作任何 App）", accOn) { PhoneAccessibilityService.openSettings(ctx) }
+        PermRow("懸浮窗（AI 操作時顯示進度浮框）", overlayOn) { ControlOverlay.requestPermission(ctx) }
         PermRow("修改系統設定（調整螢幕亮度）", writeOn) {
             try {
                 ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS,

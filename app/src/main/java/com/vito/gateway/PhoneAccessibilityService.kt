@@ -50,8 +50,8 @@ class PhoneAccessibilityService : AccessibilityService() {
                 flags = android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
                     android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
                 notificationTimeout = 100
-                capabilities = android.accessibilityservice.AccessibilityServiceInfo.CAPABILITY_CAN_RETRIEVE_WINDOW_CONTENT or
-                    android.accessibilityservice.AccessibilityServiceInfo.CAPABILITY_CAN_PERFORM_GESTURES
+                // capabilities 唯讀（只能在 accessibility_service_config.xml 宣告，已含
+                // canRetrieveWindowContent + canPerformGestures），不可在此設定。
             }
         } catch (_: Throwable) {}
         instance = this

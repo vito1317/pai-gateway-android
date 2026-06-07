@@ -20,6 +20,8 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <!-- Android 11+ 套件可見性：要能列出/啟動其他 App（LINE 等）需要這個 -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+    <!-- 懸浮窗：AI 操作手機時在所有 App 之上顯示「AI 操作中」浮框 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.FLASHLIGHT" />
 
