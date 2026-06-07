@@ -198,6 +198,47 @@ fun RootScreen() {
     }
 }
 
+/** 權限中心：列出特殊權限狀態 + 一鍵開啟（這些系統規定要手動授權，無法程式給）。 */
+@Composable
+fun PermissionCenter(ctx: android.content.Context) {
+    val notiOn = NotificationListener.isEnabled(ctx)
+    val accOn = PhoneAccessibilityService.isEnabled(ctx)
+    val writeOn = android.provider.Settings.System.canWrite(ctx)
+
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(CyberSurface).padding(14.dp)
+    ) {
+        Text("🔓 權限中心", color = CyberCyan, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text("特殊權限需手動開啟（系統規定）。開齊後 AI 才能操作 App、回 LINE、調亮度。",
+            color = CyberGray, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
+        PermRow("通知存取（讀取/回覆 LINE 等通知）", notiOn) { NotificationListener.openSettings(ctx) }
+        PermRow("協助工具（讀畫面＋點擊操作任何 App）", accOn) { PhoneAccessibilityService.openSettings(ctx) }
+        PermRow("修改系統設定（調整螢幕亮度）", writeOn) {
+            try {
+                ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                    android.net.Uri.parse("package:" + ctx.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (_: Throwable) {}
+        }
+    }
+}
+
+@Composable
+private fun PermRow(label: String, granted: Boolean, onOpen: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(if (granted) "✅" else "⚠️", fontSize = 14.sp)
+        Spacer(Modifier.width(8.dp))
+        Text(label, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        if (!granted) {
+            TextButton(onClick = onOpen) { Text("開啟", color = CyberCyan, fontSize = 12.sp) }
+        } else {
+            Text("已開啟", color = CyberGray, fontSize = 11.sp)
+        }
+    }
+}
+
 /** 操作瀏覽器時右下角的語音迷你卡：迷你能量球 + 即時狀態 + 最新處理步驟 + AI 回覆摘要。 */
 @Composable
 fun VoiceMiniOverlay(onTap: () -> Unit, modifier: Modifier = Modifier) {
@@ -237,7 +278,7 @@ fun VoiceMiniOverlay(onTap: () -> Unit, modifier: Modifier = Modifier) {
             Text(step, color = CyberCyan.copy(alpha = 0.75f), fontSize = 11.sp,
                 maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
         if (ai.isNotEmpty())
-            Text(ai, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp,
+            Text(renderMarkdown(ai), color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp,
                 maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
     }
 }
@@ -406,6 +447,9 @@ fun GatewayTab() {
                 }
             }
         }
+
+        // 權限中心：特殊權限需手動開（系統規定），這裡一目了然 + 一鍵開設定
+        item { PermissionCenter(ctx) }
 
         // 日誌終端機
         item {
@@ -638,9 +682,10 @@ fun BrowserTab() {
             wv
         })
         // 重新載入鈕（頁面空白/地圖沒渲染時用）。reload 內有 sleep，丟到背景執行緒避免卡 UI。
+        // 移到左下角，避免和右下角的語音迷你卡重疊
         FloatingActionButton(
             onClick = { Thread { try { BrowserController.reload() } catch (_: Throwable) {} }.start() },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+            modifier = Modifier.align(Alignment.BottomStart).padding(20.dp),
             containerColor = CyberSurface
         ) { Icon(Icons.Default.Refresh, contentDescription = "重新載入", tint = CyberCyan) }
     }

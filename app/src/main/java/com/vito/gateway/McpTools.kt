@@ -47,7 +47,8 @@ object McpTools {
         tool("set_brightness", "設定手機螢幕亮度（0-100，首次需授權修改系統設定）。", JSONObject().put("percent", n("百分比")), JSONArray().put("percent"))
         tool("vibrate", "讓手機震動。", JSONObject().put("ms", n("毫秒，預設500")))
         tool("battery_status", "查手機電量與充電狀態。", JSONObject())
-        tool("open_app", "開啟手機上的 app（LINE/YouTube/地圖/Chrome/Spotify/設定/相機…）。", JSONObject().put("name", s("app 名稱")), JSONArray().put("name"))
+        tool("open_app", "開啟手機上的 app（LINE/YouTube/地圖/Chrome/Spotify/設定/相機…，會查實際安裝的 App 模糊比對名稱）。", JSONObject().put("name", s("app 名稱")), JSONArray().put("name"))
+        tool("list_apps", "列出手機已安裝、可開啟的 App（顯示名稱＋套件名）。不確定某 App 在不在、或要給使用者選時用。", JSONObject())
         tool("phone_call", "用手機撥打電話。to=電話號碼或聯絡人名稱（會自動查通訊錄）。有授權直接撥出，否則開撥號畫面帶好號碼。",
             JSONObject().put("to", s("電話號碼或聯絡人名稱")), JSONArray().put("to"))
         tool("notifications_list", "讀取手機最近通知（LINE/訊息等，最多15則，標示哪些可直接回覆）。需開啟「通知存取」權限（未開會自動帶去設定頁）。", JSONObject())
@@ -104,6 +105,7 @@ object McpTools {
             "vibrate" -> DeviceTools.vibrate(ctx, args.optLong("ms", 500))
             "battery_status" -> DeviceTools.battery(ctx)
             "open_app" -> DeviceTools.openApp(ctx, args.optString("name"))
+            "list_apps" -> DeviceTools.listApps(ctx)
             "play_music" -> DeviceTools.playMusic(ctx, args.optString("query"))
             "media_control" -> DeviceTools.mediaControl(ctx, args.optString("action"))
             "phone_call" -> DeviceTools.phoneCall(ctx, args.optString("to"))

@@ -178,16 +178,51 @@ object DeviceTools {
                 "spotify" to "com.spotify.music", "telegram" to "org.telegram.messenger",
             )
             val q = query.trim().lowercase()
-            val pkg = known[q] ?: known.entries.firstOrNull { q.contains(it.key) }?.value
-            val intent = when {
-                q.contains("設定") -> Intent(Settings.ACTION_SETTINGS)
-                q.contains("相機") -> Intent("android.media.action.IMAGE_CAPTURE")
-                pkg != null -> pm.getLaunchIntentForPackage(pkg)
-                else -> null
-            } ?: return "找不到 app「$query」（可試 LINE/YouTube/地圖/Chrome/Spotify/設定/相機）"
+            // 1) 系統功能
+            if (q.contains("設定")) { ui { ctx.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }; return "已開啟設定" }
+            if (q.contains("相機")) { ui { ctx.startActivity(Intent("android.media.action.IMAGE_CAPTURE").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }; return "已開啟相機" }
+            // 2) 常見 App 套件對照
+            var pkg = known[q] ?: known.entries.firstOrNull { q.isNotEmpty() && q.contains(it.key) }?.value
+            // 3) 找不到 → 查所有已安裝 App，用顯示名稱模糊比對（需 QUERY_ALL_PACKAGES）
+            if (pkg == null) pkg = findInstalledByLabel(ctx, query.trim())
+            val intent = pkg?.let { pm.getLaunchIntentForPackage(it) }
+                ?: return "找不到 app「$query」（可先用 list_apps 看手機裝了哪些 App）"
             ui { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             "已開啟「$query」"
         } catch (e: Throwable) { "開啟 app 失敗：${e.message}" }
+    }
+
+    /** 列出已安裝（可啟動）的 App：顯示名稱（套件名）。給 AI 知道手機有哪些 App 可開。 */
+    fun listApps(ctx: Context): String {
+        return try {
+            val pm = ctx.packageManager
+            val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val apps = pm.queryIntentActivities(main, 0)
+                .mapNotNull { ri ->
+                    val label = ri.loadLabel(pm)?.toString()?.trim() ?: return@mapNotNull null
+                    if (label.isEmpty()) null else label to ri.activityInfo.packageName
+                }
+                .distinctBy { it.second }
+                .sortedBy { it.first }
+            if (apps.isEmpty()) return "讀不到 App 清單（可能缺套件可見性權限）"
+            "已安裝 App（共 ${apps.size}）：\n" + apps.joinToString("\n") { "・${it.first}（${it.second}）" }
+        } catch (e: Throwable) { "讀取 App 清單失敗：${e.message}" }
+    }
+
+    /** 依顯示名稱模糊找已安裝 App 的套件名（先精準、再包含）。 */
+    private fun findInstalledByLabel(ctx: Context, name: String): String? {
+        return try {
+            val pm = ctx.packageManager
+            val n = name.trim().lowercase()
+            if (n.isEmpty()) return null
+            val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val list = pm.queryIntentActivities(main, 0).mapNotNull { ri ->
+                val label = ri.loadLabel(pm)?.toString()?.trim()?.lowercase() ?: return@mapNotNull null
+                label to ri.activityInfo.packageName
+            }
+            list.firstOrNull { it.first == n }?.second
+                ?: list.firstOrNull { it.first.contains(n) || n.contains(it.first) }?.second
+        } catch (_: Throwable) { null }
     }
 
     fun openUrlPublic(ctx: Context, url: String): String {
