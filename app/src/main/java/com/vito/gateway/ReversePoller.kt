@@ -43,10 +43,14 @@ object ReversePoller {
                     val tool = call.getString("tool")
                     val args = call.optJSONObject("arguments") ?: JSONObject()
                     GatewayState.log("收到指令：$tool")
+                    val t0 = System.currentTimeMillis()
                     val text = try {
                         McpTools.call(ctx!!, tool, args)
                     } catch (e: Throwable) { "工具執行失敗：${e.message}" }
-                    submit(id, text)
+                    val dt = (System.currentTimeMillis() - t0) / 1000.0
+                    GatewayState.log("→ $tool 完成 ${"%.1f".format(dt)}s：${text.take(40)}")
+                    val okSubmit = submit(id, text)
+                    GatewayState.log(if (okSubmit) "↑ 已回傳結果" else "↑ 回傳失敗")
                 }
             } catch (e: Throwable) {
                 GatewayState.regStatus.value = "重連中…(${e.message?.take(30)})"
@@ -71,8 +75,8 @@ object ReversePoller {
         return if (o.isNull("call")) null else o.getJSONObject("call")
     }
 
-    private fun submit(id: String, text: String) {
-        try {
+    private fun submit(id: String, text: String): Boolean {
+        return try {
             val c = (URL("$paiBase/api/gateway/result").openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"; doOutput = true
                 connectTimeout = 10000; readTimeout = 15000
@@ -80,9 +84,10 @@ object ReversePoller {
                 setRequestProperty("X-Register-Secret", token)
             }
             c.outputStream.use { it.write(JSONObject().put("id", id).put("text", text).toString().toByteArray()) }
-            c.responseCode
+            c.responseCode in 200..299
         } catch (e: Throwable) {
             GatewayState.log("回傳結果失敗：${e.message}")
+            false
         }
     }
 
