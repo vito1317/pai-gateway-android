@@ -29,17 +29,11 @@ jobs:
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
 
-      - name: Bundle cloudflared (打包進 APK，提供公網通道)
-        run: |
-          mkdir -p app/src/main/jniLibs/arm64-v8a app/src/main/jniLibs/x86_64
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64 \
-            -o app/src/main/jniLibs/arm64-v8a/libcloudflared.so
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
-            -o app/src/main/jniLibs/x86_64/libcloudflared.so
-          ls -la app/src/main/jniLibs/arm64-v8a/
+      # 反向連線後已不需 cloudflared（節點主動連 PAI long-poll）。不再打包 ~60MB binary →
+      # build/上傳/下載/安裝都變快、APK 大幅縮小、也不再因下載 cloudflared 504 而失敗。
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug --no-daemon --stacktrace --build-cache
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
