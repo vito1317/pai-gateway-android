@@ -151,12 +151,20 @@ fun RootScreen() {
         }
     }
 
-    // 點通知開啟 App → 彈出完整內容（markdown 渲染、可滑）
+    // show_document / 點通知 → 自動彈出完整內容（markdown、可滑、可開連結/分享）
     if (GatewayState.noticeText.value.isNotEmpty()) {
+        val ctx = LocalContext.current
+        val url = GatewayState.noticeUrl.value
         AlertDialog(
             onDismissRequest = { GatewayState.noticeText.value = "" },
             confirmButton = { TextButton(onClick = { GatewayState.noticeText.value = "" }) { Text("關閉", color = CyberCyan) } },
-            title = { Text("📋 PAI 通知", color = CyberCyan) },
+            dismissButton = {
+                Row {
+                    if (url.isNotEmpty()) TextButton(onClick = { DeviceTools.openUrlPublic(ctx, url) }) { Text("開啟連結", color = CyberCyan) }
+                    TextButton(onClick = { DeviceTools.shareText(ctx, GatewayState.noticeText.value) }) { Text("分享", color = CyberGray) }
+                }
+            },
+            title = { Text("📋 ${GatewayState.noticeTitle.value}", color = CyberCyan) },
             text = {
                 Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
                     Text(renderMarkdown(GatewayState.noticeText.value), color = Color.White, fontSize = 14.sp)

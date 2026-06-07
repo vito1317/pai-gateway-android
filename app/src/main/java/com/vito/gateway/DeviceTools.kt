@@ -163,6 +163,14 @@ object DeviceTools {
         } catch (e: Throwable) { "開啟 app 失敗：${e.message}" }
     }
 
+    fun openUrlPublic(ctx: Context, url: String): String {
+        return try {
+            val u = if (Regex("^https?://").containsMatchIn(url)) url else "https://$url"
+            ui { ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(u)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            "已開啟連結"
+        } catch (e: Throwable) { "開啟失敗：${e.message}" }
+    }
+
     fun shareText(ctx: Context, text: String): String {
         return try {
             ui {
