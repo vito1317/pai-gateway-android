@@ -28,7 +28,8 @@ object Cloudflared {
         stop()
         val bin = binaryPath(ctx) ?: run { onLog("找不到 cloudflared（請放 jniLibs/arm64-v8a/libcloudflared.so）"); return false }
         return try {
-            val pb = ProcessBuilder(bin, "tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:$port")
+            // --protocol http2：走 TCP 443，避開行動網路常擋的 QUIC/UDP 7844（否則 tunnel 建不起來只連到 api）
+            val pb = ProcessBuilder(bin, "tunnel", "--no-autoupdate", "--protocol", "http2", "--url", "http://127.0.0.1:$port")
             pb.redirectErrorStream(true)
             val p = pb.start()
             proc = p

@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestRuntimePerms() {
-        val want = mutableListOf(Manifest.permission.RECORD_AUDIO)
+        val want = mutableListOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
         if (Build.VERSION.SDK_INT >= 33) want.add(Manifest.permission.POST_NOTIFICATIONS)
         val missing = want.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) {
@@ -143,11 +143,14 @@ fun GatewayTab() {
 
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { res ->
         val c = res.contents
-        if (!c.isNullOrBlank()) {
-            if (applyPairCode(c, prefs)) {
-                paiBase = prefs.paiBase; token = prefs.registerToken
-                pairWithStart(ctx, prefs)
-            } else GatewayState.log("QR 內容不是有效配對碼")
+        if (c.isNullOrBlank()) {
+            GatewayState.log("掃描取消或未取得內容")
+        } else if (applyPairCode(c, prefs)) {
+            paiBase = prefs.paiBase; token = prefs.registerToken
+            GatewayState.log("✅ 已配對 ${prefs.nodeName}，啟動中…")
+            pairWithStart(ctx, prefs)
+        } else {
+            GatewayState.log("QR 內容不是有效配對碼：" + c.take(24))
         }
     }
 
