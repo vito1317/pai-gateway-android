@@ -16,9 +16,26 @@ android {
         versionCode = ci ?: 1
         versionName = if (ci != null) "1.0.$ci" else "1.0-dev"
     }
+    signingConfigs {
+        // 固定簽章：用 repo 內的 release.keystore（CI 第一次自動產生並 commit）→
+        // 每個 build 簽章一致，能直接覆蓋更新（不會再「與現有套件衝突」）。
+        val ks = rootProject.file("release.keystore")
+        if (ks.exists()) {
+            create("fixed") {
+                storeFile = ks
+                storePassword = "paigateway"
+                keyAlias = "pai"
+                keyPassword = "paigateway"
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (signingConfigs.findByName("fixed") != null) signingConfig = signingConfigs.getByName("fixed")
+        }
         release {
             isMinifyEnabled = false
+            if (signingConfigs.findByName("fixed") != null) signingConfig = signingConfigs.getByName("fixed")
         }
     }
     compileOptions {

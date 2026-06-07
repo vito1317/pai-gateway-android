@@ -26,6 +26,22 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Ensure fixed signing keystore（第一次產生並 commit，之後固定簽章可覆蓋更新）
+        run: |
+          if [ ! -f release.keystore ]; then
+            keytool -genkeypair -v -keystore release.keystore -storepass paigateway -keypass paigateway \
+              -alias pai -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=PAI Gateway, OU=PAI, O=Vito, L=Taipei, C=TW"
+            git config user.name "github-actions"
+            git config user.email "actions@github.com"
+            git add release.keystore
+            git commit -m "ci: 加入固定簽章 keystore（可覆蓋更新）[skip ci]"
+            git push
+            echo "已產生並提交固定 keystore"
+          else
+            echo "已存在固定 keystore，沿用"
+          fi
+
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
 
