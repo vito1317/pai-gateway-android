@@ -175,4 +175,37 @@ class PhoneAccessibilityService : AccessibilityService() {
         Thread.sleep(700)
         return snapshot()
     }
+
+    /** 截圖（縮到寬 720、JPEG70）回 base64 data URI，帶 [[IMG]] 標記讓 PAI 把它餵給能看圖的 LLM。 */
+    fun screenshotB64(): String {
+        if (android.os.Build.VERSION.SDK_INT < 30) return "此 Android 版本不支援截圖（需 Android 11+）"
+        val latch = CountDownLatch(1)
+        var result = "截圖失敗"
+        try {
+            takeScreenshot(android.view.Display.DEFAULT_DISPLAY, mainExecutor,
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: ScreenshotResult) {
+                        try {
+                            val hw = android.graphics.Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
+                            screenshot.hardwareBuffer.close()
+                            val bmp = hw?.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                            if (bmp != null) {
+                                val scale = 720f / bmp.width
+                                val small = if (scale < 1f)
+                                    android.graphics.Bitmap.createScaledBitmap(bmp, 720, (bmp.height * scale).toInt(), true)
+                                else bmp
+                                val bos = java.io.ByteArrayOutputStream()
+                                small.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, bos)
+                                result = "[[IMG]]data:image/jpeg;base64," +
+                                    android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)
+                            }
+                        } catch (e: Throwable) { result = "截圖處理失敗：${e.message}" }
+                        latch.countDown()
+                    }
+                    override fun onFailure(errorCode: Int) { result = "截圖失敗（code=$errorCode）"; latch.countDown() }
+                })
+        } catch (e: Throwable) { return "截圖失敗：${e.message}" }
+        latch.await(8, TimeUnit.SECONDS)
+        return result
+    }
 }

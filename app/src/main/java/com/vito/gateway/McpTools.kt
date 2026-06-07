@@ -60,6 +60,7 @@ object McpTools {
         tool("screen_swipe", "滑動手機畫面。direction=up/down/left/right（up=往上滑看更多）。", JSONObject().put("direction", s("up|down|left|right")), JSONArray().put("direction"))
         tool("screen_back", "按手機返回鍵。", JSONObject())
         tool("screen_home", "回手機主畫面。", JSONObject())
+        tool("screen_shot", "手機截圖給你「看」（你能直接看圖）。screen_snapshot 元素讀不懂、畫面是圖片/地圖/遊戲、或想確認畫面長怎樣時用。", JSONObject())
         tool("play_music", "在手機播放音樂：叫起預設音樂 App（YouTube Music/Spotify）直接播。query=歌名/歌手；留空=開 YouTube Music。",
             JSONObject().put("query", s("歌名或歌手")))
         tool("media_control", "控制手機媒體播放（對任何在播的音樂 App 有效）：pause/play/next/previous。",
@@ -134,6 +135,7 @@ object McpTools {
             "screen_swipe" -> PhoneAccessibilityService.instance?.swipe(args.optString("direction")) ?: accNeed(ctx)
             "screen_back" -> PhoneAccessibilityService.instance?.back() ?: accNeed(ctx)
             "screen_home" -> PhoneAccessibilityService.instance?.home() ?: accNeed(ctx)
+            "screen_shot" -> PhoneAccessibilityService.instance?.screenshotB64() ?: accNeed(ctx)
             "maps_route" -> DeviceTools.mapsRoute(ctx, args.optString("origin"), args.optString("destination"), args.optString("waypoints"), args.optString("mode"))
             "share_text" -> DeviceTools.shareText(ctx, args.optString("text"))
             "phone_speak" -> DeviceTools.speak(ctx, args.optString("text"))
