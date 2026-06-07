@@ -34,6 +34,8 @@ android {
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // cloudflared 以 .so 打包進 jniLibs，需保留為可執行（不壓縮、解壓到 nativeLibraryDir）
+        jniLibs.useLegacyPackaging = true
     }
 }
 
