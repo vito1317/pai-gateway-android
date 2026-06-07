@@ -198,6 +198,45 @@ object DeviceTools {
         } catch (e: Throwable) { "開啟失敗：${e.message}" }
     }
 
+    /** 播放音樂：用 Android 標準「依搜尋播放」intent 叫起預設音樂 App（YouTube Music/Spotify）直接播；
+     *  沒有 App 接手就退回開 YouTube 搜尋。query 留空＝開 YouTube Music 首頁。 */
+    fun playMusic(ctx: Context, query: String): String {
+        if (query.isBlank()) return openUrlPublic(ctx, "https://music.youtube.com/")
+        val fallback = "https://www.youtube.com/results?search_query=" + android.net.Uri.encode(query)
+        ui {
+            try {
+                ctx.startActivity(Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
+                    putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+                    putExtra(android.provider.MediaStore.EXTRA_MEDIA_TITLE, query)
+                    putExtra(android.app.SearchManager.QUERY, query)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+            } catch (e: Throwable) {
+                try {
+                    ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(fallback)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (_: Throwable) {}
+            }
+        }
+        return "已請音樂 App 播放「$query」"
+    }
+
+    /** 媒體控制（暫停/繼續/下一首/上一首）：送系統媒體鍵，對任何正在播的音樂 App 都有效。 */
+    fun mediaControl(ctx: Context, action: String): String {
+        return try {
+            val key = when (action.lowercase().trim()) {
+                "pause", "stop", "暫停", "停止" -> android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
+                "play", "resume", "繼續", "播放" -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY
+                "next", "下一首" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+                "previous", "prev", "上一首" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+                else -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+            }
+            val am = ctx.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, key))
+            am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, key))
+            "已送出媒體控制：$action"
+        } catch (e: Throwable) { "媒體控制失敗：${e.message}" }
+    }
+
     /** 在原生 Google 地圖 App 顯示路線（WebView 渲染不出地圖，原生 App 一定行）。
      *  destination 必填；origin 空白＝從目前位置；waypoints 用「|」分隔多個途經點。 */
     fun mapsRoute(ctx: Context, origin: String, destination: String, waypoints: String, mode: String): String {

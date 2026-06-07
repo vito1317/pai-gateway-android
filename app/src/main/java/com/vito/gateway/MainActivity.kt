@@ -21,7 +21,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyColumn
@@ -162,10 +164,61 @@ fun RootScreen() {
                 NavItem.Voice -> Box(Modifier.fillMaxSize().zIndex(2f).background(CyberBackground)) { VoiceTab() }
                 NavItem.Browser -> {}
             }
+            // 操作瀏覽器時：右下角顯示語音迷你卡（即時狀態/處理步驟/回覆摘要），點一下回語音分頁
+            if (browserVisible && VoiceEngine.active.value) {
+                VoiceMiniOverlay(
+                    onTap = { selectedItem = NavItem.Voice },
+                    modifier = Modifier.align(Alignment.BottomEnd).zIndex(3f)
+                )
+            }
         }
     }
 
-    // show_document / 點通知 → 自動彈出完整內容（markdown、可滑、可開連結/分享）
+    /** 操作瀏覽器時右下角的語音迷你卡：迷你能量球 + 即時狀態 + 最新處理步驟 + AI 回覆摘要。 */
+@Composable
+fun VoiceMiniOverlay(onTap: () -> Unit, modifier: Modifier = Modifier) {
+    val speaking = VoiceEngine.speaking.value
+    val vol = VoiceEngine.volume.value
+    val status = VoiceEngine.status.value
+    val step = VoiceEngine.steps.value.split("\n").lastOrNull { it.isNotBlank() } ?: ""
+    val ai = VoiceEngine.transcript.value
+    Column(
+        modifier
+            .padding(end = 12.dp, bottom = 12.dp)
+            .widthIn(max = 240.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(CyberSurface.copy(alpha = 0.93f))
+            .clickable { onTap() }
+            .padding(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // 迷你能量球（隨音量/回應狀態變化）
+            val scale = 1f + (vol * 4f).coerceAtMost(0.6f)
+            Box(
+                Modifier.size(18.dp).scale(scale).clip(CircleShape).background(
+                    Brush.radialGradient(listOf(
+                        (if (speaking) Color(0xFF8B5CF6) else CyberCyan).copy(alpha = 0.95f),
+                        Color.Transparent
+                    ))
+                )
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (speaking) "回應中…" else status.ifEmpty { "聆聽中" },
+                color = CyberCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (step.isNotEmpty())
+            Text(step, color = CyberCyan.copy(alpha = 0.75f), fontSize = 11.sp,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+        if (ai.isNotEmpty())
+            Text(ai, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp,
+                maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+// show_document / 點通知 → 自動彈出完整內容（markdown、可滑、可開連結/分享）
     if (GatewayState.noticeText.value.isNotEmpty()) {
         val ctx = LocalContext.current
         val url = GatewayState.noticeUrl.value

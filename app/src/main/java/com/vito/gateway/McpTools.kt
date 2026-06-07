@@ -48,6 +48,10 @@ object McpTools {
         tool("vibrate", "讓手機震動。", JSONObject().put("ms", n("毫秒，預設500")))
         tool("battery_status", "查手機電量與充電狀態。", JSONObject())
         tool("open_app", "開啟手機上的 app（LINE/YouTube/地圖/Chrome/Spotify/設定/相機…）。", JSONObject().put("name", s("app 名稱")), JSONArray().put("name"))
+        tool("play_music", "在手機播放音樂：叫起預設音樂 App（YouTube Music/Spotify）直接播。query=歌名/歌手；留空=開 YouTube Music。",
+            JSONObject().put("query", s("歌名或歌手")))
+        tool("media_control", "控制手機媒體播放（對任何在播的音樂 App 有效）：pause/play/next/previous。",
+            JSONObject().put("action", s("pause|play|next|previous")), JSONArray().put("action"))
         tool("maps_route", "在原生 Google 地圖 App【顯示路線/導航】（要在地圖上看到路線就用這個，內建瀏覽器渲染不出地圖）。destination 必填；origin 留空=從目前位置；waypoints 多個途經點用「|」分隔；mode=driving/walking/transit/bicycling。",
             JSONObject().put("origin", s("起點，留空=目前位置")).put("destination", s("終點")).put("waypoints", s("途經點，用|分隔")).put("mode", s("交通方式 driving/walking/transit/bicycling")),
             JSONArray().put("destination"))
@@ -87,6 +91,8 @@ object McpTools {
             "vibrate" -> DeviceTools.vibrate(ctx, args.optLong("ms", 500))
             "battery_status" -> DeviceTools.battery(ctx)
             "open_app" -> DeviceTools.openApp(ctx, args.optString("name"))
+            "play_music" -> DeviceTools.playMusic(ctx, args.optString("query"))
+            "media_control" -> DeviceTools.mediaControl(ctx, args.optString("action"))
             "maps_route" -> DeviceTools.mapsRoute(ctx, args.optString("origin"), args.optString("destination"), args.optString("waypoints"), args.optString("mode"))
             "share_text" -> DeviceTools.shareText(ctx, args.optString("text"))
             "phone_speak" -> DeviceTools.speak(ctx, args.optString("text"))
