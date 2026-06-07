@@ -215,6 +215,19 @@ fun PermissionCenter(ctx: android.content.Context) {
         PermRow("通知存取（讀取/回覆 LINE 等通知）", notiOn) { NotificationListener.openSettings(ctx) }
         PermRow("協助工具（讀畫面＋點擊操作任何 App）", accOn) { PhoneAccessibilityService.openSettings(ctx) }
         PermRow("懸浮窗（AI 操作時顯示進度浮框）", overlayOn) { ControlOverlay.requestPermission(ctx) }
+        // 電池最佳化豁免（避免反向連線/語音被系統殺掉）
+        val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+        val battOk = pm.isIgnoringBatteryOptimizations(ctx.packageName)
+        PermRow("電池不限制（避免背景被殺）", battOk) {
+            try {
+                ctx.startActivity(android.content.Intent(
+                    android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    android.net.Uri.parse("package:" + ctx.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (_: Throwable) {}
+        }
+        // 小米/HyperOS 自動啟動（找不到就開 App 詳情頁讓使用者手動）
+        Text("小米/HyperOS 請另到「設定→應用程式→PAI Gateway」開啟『自動啟動』，服務才不會被關。",
+            color = CyberGray, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
         PermRow("修改系統設定（調整螢幕亮度）", writeOn) {
             try {
                 ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS,
@@ -569,6 +582,14 @@ fun VoiceTab() {
     val speaking = VoiceEngine.speaking.value
     val vol = VoiceEngine.volume.value
     // 注意：不在 onDispose 停止語音——切到瀏覽器分頁時語音要繼續在背景跑
+
+    // 快速設定磚啟動 → 自動開始語音
+    LaunchedEffect(GatewayState.autoStartVoice.value) {
+        if (GatewayState.autoStartVoice.value) {
+            GatewayState.autoStartVoice.value = false
+            if (!VoiceEngine.active.value) VoiceEngine.start(ctx, prefs.paiBase, wake)
+        }
+    }
 
     // 能量球脈動
     val infinite = rememberInfiniteTransition(label = "orb")

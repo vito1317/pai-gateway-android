@@ -22,6 +22,8 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
     <!-- 懸浮窗：AI 操作手機時在所有 App 之上顯示「AI 操作中」浮框 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- 電池最佳化豁免：避免反向連線/語音被系統殺掉（MIUI/HyperOS 尤其需要） -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.FLASHLIGHT" />
 
@@ -49,6 +51,18 @@
             android:name=".GatewayService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- 快速設定磚：下拉通知欄一鍵啟動語音助理 -->
+        <service
+            android:name=".VoiceTileService"
+            android:label="PAI 語音"
+            android:icon="@android:drawable/ic_btn_speak_now"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- 通知存取：讀取/快速回覆 LINE 等通知（需使用者在設定開「通知存取」） -->
         <service
