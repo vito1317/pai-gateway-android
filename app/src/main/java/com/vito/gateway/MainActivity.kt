@@ -672,6 +672,11 @@ fun VoiceTab() {
                     modifier = Modifier.padding(top = 6.dp))
         }
 
+        // 拍照給 AI 看（TakePicturePreview 直接回縮圖 Bitmap）
+        val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
+            if (bmp != null) VisionClient.analyze(ctx, bmp, "請看這張照片，用台灣正體中文說明你看到什麼。")
+        }
+
         Spacer(Modifier.height(8.dp))
         // 控制列
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -688,6 +693,11 @@ fun VoiceTab() {
                 modifier = Modifier.size(72.dp).clip(CircleShape)
                     .background(if (active) Color(0xFFEF4444) else CyberCyan)
             ) { Icon(if (active) Icons.Default.Close else Icons.Default.Call, "call", tint = Color.Black, modifier = Modifier.size(32.dp)) }
+            // 📷 拍照問 AI（看圖）
+            IconButton(
+                onClick = { photoLauncher.launch(null) },
+                modifier = Modifier.size(52.dp).clip(CircleShape).background(CyberSurface)
+            ) { Icon(Icons.Default.PhotoCamera, "拍照問 AI", tint = CyberCyan) }
         }
         Spacer(Modifier.height(8.dp))
     }
