@@ -33,9 +33,9 @@ object VoiceEngine {
     private var socket: Socket? = null
     private var recorder: AudioRecord? = null
     private var track: AudioTrack? = null
+    val muted = mutableStateOf(false)   // Compose 可觀察 → 靜音按鈕 icon 會即時更新
     @Volatile private var recording = false
     @Volatile private var micMuteUntil = 0L
-    @Volatile private var muted = false
     @Volatile private var bargeIn = true
     @Volatile private var loggedAudioType = false
     @Volatile private var loggedAudio = false
@@ -44,8 +44,8 @@ object VoiceEngine {
     private const val OUT_RATE = 24000
     private const val BARGE_RMS = 0.06f
 
-    fun toggleMute() { muted = !muted }
-    fun isMuted() = muted
+    fun toggleMute() { muted.value = !muted.value }
+    fun isMuted() = muted.value
 
     fun start(paiBase: String, wake: Boolean) {
         if (active.value) return
@@ -129,7 +129,9 @@ object VoiceEngine {
                 for (i in 0 until n) { val f = buf[i] / 32768.0; sum += f * f }
                 val rms = sqrt(sum / n).toFloat()
                 volume.value = rms
-                if (muted) continue
+                // 播放預計時間已過（最後一段音訊播完）→ 關閉「回應中」，回到聆聽
+                if (speaking.value && System.currentTimeMillis() > micMuteUntil) speaking.value = false
+                if (muted.value) continue
                 // AI 播放期間：只送明顯人聲（打斷），其餘丟棄防回授
                 if (System.currentTimeMillis() < micMuteUntil && (!bargeIn || rms < BARGE_RMS)) continue
                 // PCM16 → JSON int array（與 web 協定一致）

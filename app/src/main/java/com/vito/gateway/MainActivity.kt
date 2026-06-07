@@ -475,27 +475,32 @@ fun VoiceTab() {
                     .background(Brush.radialGradient(listOf(orbColor.copy(alpha = 0.95f), orbColor.copy(alpha = 0.15f))))
             )
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         Text(phase, color = if (userSpeaking) Color(0xFF22D3EE) else CyberGray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.weight(0.4f))
+        Spacer(Modifier.height(8.dp))
 
-        // 字幕
-        if (VoiceEngine.steps.value.isNotEmpty())
-            Text(VoiceEngine.steps.value, color = CyberCyan.copy(alpha = 0.7f), fontSize = 11.sp)
-        if (VoiceEngine.userText.value.isNotEmpty())
-            Text("你：${VoiceEngine.userText.value}", color = CyberGray, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-        if (VoiceEngine.transcript.value.isNotEmpty())
-            Text(renderMarkdown(VoiceEngine.transcript.value), color = Color.White, fontSize = 15.sp,
-                modifier = Modifier.padding(top = 6.dp).verticalScroll(rememberScrollState()).heightIn(max = 200.dp))
+        // 字幕區（佔剩餘空間、可上下滑；內容更新自動捲到最新）
+        val scroll = rememberScrollState()
+        LaunchedEffect(VoiceEngine.transcript.value) { scroll.animateScrollTo(scroll.maxValue) }
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll)) {
+            if (VoiceEngine.steps.value.isNotEmpty())
+                Text(VoiceEngine.steps.value, color = CyberCyan.copy(alpha = 0.7f), fontSize = 11.sp)
+            if (VoiceEngine.userText.value.isNotEmpty())
+                Text("你：${VoiceEngine.userText.value}", color = CyberGray, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            if (VoiceEngine.transcript.value.isNotEmpty())
+                Text(renderMarkdown(VoiceEngine.transcript.value), color = Color.White, fontSize = 15.sp,
+                    modifier = Modifier.padding(top = 6.dp))
+        }
 
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(8.dp))
         // 控制列
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             if (active) {
                 IconButton(
                     onClick = { VoiceEngine.toggleMute() },
                     modifier = Modifier.size(52.dp).clip(CircleShape).background(CyberSurface)
-                ) { Icon(if (VoiceEngine.isMuted()) Icons.Default.MicOff else Icons.Default.Mic, "mute", tint = CyberGray) }
+                ) { Icon(if (VoiceEngine.muted.value) Icons.Default.MicOff else Icons.Default.Mic, "mute",
+                    tint = if (VoiceEngine.muted.value) Color(0xFFEF4444) else CyberGray) }
             }
             // 主按鈕：開始/結束通話
             IconButton(

@@ -8,7 +8,7 @@ import androidx.compose.ui.text.withStyle
 
 /**
  * 輕量 Markdown → AnnotatedString（給語音字幕用）。
- * 支援：標題、**粗體**、*斜體*、`code`、清單(-/*/數字→•)、表格符號清掉、LaTeX→純文字。
+ * 支援：標題、粗體、斜體、行內 code、清單（破折號或數字轉成圓點）、表格符號清掉、LaTeX 轉純文字。
  * 不依賴外部庫，避免編譯風險。
  */
 fun renderMarkdown(src: String): AnnotatedString = buildAnnotatedString {

@@ -1,9 +1,11 @@
 package com.vito.gateway
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
