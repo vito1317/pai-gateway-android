@@ -37,6 +37,8 @@ object VoiceEngine {
     @Volatile private var micMuteUntil = 0L
     @Volatile private var muted = false
     @Volatile private var bargeIn = true
+    @Volatile private var loggedAudioType = false
+    @Volatile private var loggedAudio = false
 
     private const val IN_RATE = 16000
     private const val OUT_RATE = 24000
@@ -73,7 +75,20 @@ object VoiceEngine {
             }
             s.on(Socket.EVENT_DISCONNECT) { status.value = "已斷線" }
             s.on(Socket.EVENT_CONNECT_ERROR) { status.value = "連線失敗" }
-            s.on("audio") { args -> (args.getOrNull(0) as? ByteArray)?.let { playPcm(it) } }
+            s.on("audio") { args ->
+                when (val d = args.getOrNull(0)) {
+                    is ByteArray -> playPcm(d)
+                    is org.json.JSONObject -> {
+                        // 某些情況 binary 被包成 {audio:[...]} 或 base64
+                        d.optJSONArray("audio")?.let { ja ->
+                            val b = ByteArray(ja.length()) { i -> (ja.getInt(i) and 0xFF).toByte() }
+                            playPcm(b)
+                        }
+                    }
+                    is String -> try { playPcm(android.util.Base64.decode(d, android.util.Base64.DEFAULT)) } catch (e: Throwable) {}
+                    else -> if (!loggedAudioType) { loggedAudioType = true; GatewayState.log("audio 型別: ${d?.javaClass?.simpleName}") }
+                }
+            }
             s.on("stop_tts") { stopPlayback() }
             s.on("ai_text") { args -> transcript.value = args.getOrNull(0)?.toString() ?: "" }
             s.on("user_transcript") { args -> userText.value = args.getOrNull(0)?.toString() ?: "" }
@@ -146,12 +161,17 @@ object VoiceEngine {
     private fun playPcm(bytes: ByteArray) {
         try {
             val t = ensureTrack()
-            t.write(bytes, 0, bytes.size)
+            if (!loggedAudio) {
+                loggedAudio = true
+                GatewayState.log("▶ 收到音訊 ${bytes.size}B, playState=${t.playState}, state=${t.state}")
+            }
+            val n = t.write(bytes, 0, bytes.size, AudioTrack.WRITE_BLOCKING)
+            if (n < 0) GatewayState.log("AudioTrack write 失敗: $n")
+            if (t.playState != AudioTrack.PLAYSTATE_PLAYING) t.play()
             speaking.value = true
-            // 播放期間靜音麥克風（加緩衝防回授）；barge-in 例外（明顯人聲仍送）
             val durMs = (bytes.size / 2.0 / OUT_RATE * 1000).toLong()
             micMuteUntil = System.currentTimeMillis() + durMs + 600
-        } catch (e: Throwable) {}
+        } catch (e: Throwable) { GatewayState.log("播放失敗: ${e.message}") }
     }
 
     private fun stopPlayback() {
