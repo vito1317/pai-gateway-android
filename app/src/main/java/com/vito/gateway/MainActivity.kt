@@ -508,28 +508,14 @@ fun VoiceTab() {
     }
 }
 
-// ── 瀏覽器：AI 操作會顯示在這（內建受控瀏覽器）─────────────────────────────────
-@SuppressLint("SetJavaScriptEnabled")
+// ── 瀏覽器：顯示「常駐」受控 WebView（同一實例，不隨分頁重建，背景也持續可操作）────────
 @Composable
 fun BrowserTab() {
+    val ctx = LocalContext.current
     AndroidView(modifier = Modifier.fillMaxSize().background(CyberBackground), factory = { c ->
-        WebView(c).apply {
-            setBackgroundColor(0) // Transparent
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.databaseEnabled = true
-            settings.loadWithOverviewMode = true
-            settings.useWideViewPort = true
-            settings.userAgentString = settings.userAgentString.replace("; wv", "").plus(" PAIGateway")
-            webChromeClient = WebChromeClient()
-            webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    view?.evaluateJavascript(BrowserJs.HELPERS, null) // 安裝 __gwClick/__gwType
-                }
-            }
-            loadUrl("https://www.google.com")
-            BrowserController.attach(this)
-        }
+        val wv = BrowserController.ensureWebView(c)
+        (wv.parent as? android.view.ViewGroup)?.removeView(wv) // 脫離上次的 parent 再掛載
+        wv
     })
 }
 

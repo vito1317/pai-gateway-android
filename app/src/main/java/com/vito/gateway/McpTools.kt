@@ -54,8 +54,11 @@ object McpTools {
     }
 
     fun call(ctx: Context, name: String, args: JSONObject): String {
-        // 操作瀏覽器時自動切到「瀏覽器」分頁顯示（語音繼續在背景跑）
-        if (name.startsWith("browser_")) GatewayState.requestTab.value = "browser"
+        // 操作瀏覽器時：確保常駐 WebView 已建（背景也能操作）+ 自動切到瀏覽器分頁顯示（語音背景續跑）
+        if (name.startsWith("browser_")) {
+            BrowserController.ensureWebView(ctx)
+            GatewayState.requestTab.value = "browser"
+        }
         return when (name) {
             "browser_navigate" -> BrowserController.navigate(args.optString("url"))
             "browser_snapshot" -> BrowserController.snapshot()

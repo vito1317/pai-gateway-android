@@ -23,8 +23,47 @@ object BrowserController {
     @Volatile private var webView: WebView? = null
     private val main = Handler(Looper.getMainLooper())
 
-    fun attach(wv: WebView) { webView = wv }
     fun isReady() = webView != null
+
+    /**
+     * 常駐 WebView（用 application context，不綁任何分頁）。第一次呼叫時在主執行緒建立並手動
+     * measure/layout 到固定尺寸 → 即使不在前景分頁，DOM 仍有 layout、座標有效（背景也能操作）。
+     */
+    fun ensureWebView(ctx: Context): WebView {
+        webView?.let { return it }
+        val appCtx = ctx.applicationContext
+        val latch = CountDownLatch(1)
+        main.post {
+            try {
+                val w = WebView(appCtx)
+                w.settings.javaScriptEnabled = true
+                w.settings.domStorageEnabled = true
+                w.settings.databaseEnabled = true
+                w.settings.loadWithOverviewMode = true
+                w.settings.useWideViewPort = true
+                w.settings.mediaPlaybackRequiresUserGesture = false
+                w.settings.userAgentString = w.settings.userAgentString.replace("; wv", "").plus(" PAIGateway")
+                w.webChromeClient = android.webkit.WebChromeClient()
+                w.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        view?.evaluateJavascript(BrowserJs.HELPERS, null)
+                    }
+                }
+                // 手動量測+佈局：背景（未 attach 到畫面）時也有尺寸 → getBoundingClientRect 座標有效
+                val wSpec = android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY)
+                val hSpec = android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY)
+                w.measure(wSpec, hSpec)
+                w.layout(0, 0, 1080, 1920)
+                w.loadUrl("https://www.google.com")
+                webView = w
+            } catch (e: Throwable) {
+                GatewayState.log("WebView 建立失敗：${e.message}")
+            }
+            latch.countDown()
+        }
+        latch.await(8, TimeUnit.SECONDS)
+        return webView ?: throw IllegalStateException("WebView 尚未就緒")
+    }
 
     /** 在主執行緒同步執行 WebView 動作並取回字串結果（背景 server thread 呼叫）。 */
     private fun <T> onMain(timeoutSec: Long = 20, block: (WebView, (T) -> Unit) -> Unit): T? {
