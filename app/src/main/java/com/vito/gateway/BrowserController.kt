@@ -31,13 +31,33 @@ object BrowserController {
      * 常駐 WebView（用 application context，不綁任何分頁）。第一次呼叫時在主執行緒建立並手動
      * measure/layout 到固定尺寸 → 即使不在前景分頁，DOM 仍有 layout、座標有效（背景也能操作）。
      */
+    @Volatile private var ctxWrapper: android.content.MutableContextWrapper? = null
+
+    /** BrowserTab 掛載時呼叫：把 WebView 的 base context 換成 Activity（JS 渲染引擎需要 Activity context 才正常）。 */
+    fun attachContext(ctx: Context) {
+        val act = ctx as? android.app.Activity ?: return
+        main.post { try { ctxWrapper?.baseContext = act } catch (_: Throwable) {} }
+    }
+
     fun ensureWebView(ctx: Context): WebView {
-        webView?.let { return it }
+        val act = ctx as? android.app.Activity
+        webView?.let { existing ->
+            // 若現有 WebView 不是用 Activity context 建的（JS 引擎可能不活躍），而現在拿得到 Activity → 銷毀重建
+            if (act == null || ctxWrapper?.baseContext is android.app.Activity) return existing
+            GatewayState.log("用 Activity context 重建 WebView…")
+            val latch0 = CountDownLatch(1)
+            main.post { try { (existing.parent as? android.view.ViewGroup)?.removeView(existing); existing.destroy() } catch (_: Throwable) {}; webView = null; latch0.countDown() }
+            latch0.await(3, TimeUnit.SECONDS)
+        }
         val appCtx = ctx.applicationContext
         val latch = CountDownLatch(1)
         main.post {
             try {
-                val w = WebView(appCtx)
+                // 用 MutableContextWrapper：優先用 Activity context（JS 渲染引擎需要它，用 application context
+                // 會讓 evaluateJavascript 的 callback 永遠不回 → read/snapshot 卡死）。沒有 Activity 才退而用 app。
+                val wrapper = android.content.MutableContextWrapper((ctx as? android.app.Activity) ?: appCtx)
+                ctxWrapper = wrapper
+                val w = WebView(wrapper)
                 w.settings.javaScriptEnabled = true
                 w.settings.domStorageEnabled = true
                 w.settings.databaseEnabled = true
@@ -53,6 +73,15 @@ object BrowserController {
                 w.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         view?.evaluateJavascript(BrowserJs.HELPERS, null)
+                    }
+                    // 渲染行程死掉（crash/被系統回收）→ WebView 變殭屍，evaluateJavascript 永遠不回。
+                    // 銷毀並清空，下次操作會自動重建一個新的。回 true 表示已處理，避免整個 App 崩潰。
+                    override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                        GatewayState.log("WebView 渲染行程結束，重建中…")
+                        try { (view?.parent as? android.view.ViewGroup)?.removeView(view) } catch (_: Throwable) {}
+                        try { view?.destroy() } catch (_: Throwable) {}
+                        if (webView === view) webView = null
+                        return true
                     }
                     // 攔非 http(s) scheme：Google Maps 等會重導向 intent:// 想喚起 App，
                     // WebView 不認得 → net::ERR_UNKNOWN_URL_SCHEME。自動化要留在頁面內，

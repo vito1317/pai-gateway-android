@@ -148,10 +148,17 @@ fun RootScreen() {
         }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).background(CyberBackground)) {
+            // 瀏覽器 WebView【永遠掛載】：不在瀏覽器分頁時用全螢幕但透明(alpha 0)墊在底層，
+            // 保持 attached、有 surface → 背景的 evaluateJavascript/頁面載入才不會卡死（偵錯實證）。
+            val browserVisible = selectedItem == NavItem.Browser
+            Box(Modifier.fillMaxSize().alpha(if (browserVisible) 1f else 0f).zIndex(if (browserVisible) 1f else 0f)) {
+                BrowserTab()
+            }
+            // 其他分頁畫在上層（不透明背景會蓋住底層透明的瀏覽器）
             when (selectedItem) {
-                NavItem.Node -> GatewayTab()
-                NavItem.Voice -> VoiceTab()
-                NavItem.Browser -> BrowserTab()
+                NavItem.Node -> Box(Modifier.fillMaxSize().zIndex(2f).background(CyberBackground)) { GatewayTab() }
+                NavItem.Voice -> Box(Modifier.fillMaxSize().zIndex(2f).background(CyberBackground)) { VoiceTab() }
+                NavItem.Browser -> {}
             }
         }
     }
@@ -571,6 +578,7 @@ fun BrowserTab() {
     Box(Modifier.fillMaxSize()) {
         AndroidView(modifier = Modifier.fillMaxSize().background(CyberBackground), factory = { c ->
             val wv = BrowserController.ensureWebView(c)
+            BrowserController.attachContext(c) // 把 WebView base context 換成 Activity → JS 引擎正常
             (wv.parent as? android.view.ViewGroup)?.removeView(wv) // 脫離上次的 parent 再掛載
             wv
         })
