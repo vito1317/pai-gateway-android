@@ -79,6 +79,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         requestRuntimePerms()
         handleNotice(intent)
+        // 已配對過 → App 一開就自動把反向節點服務跑起來（long-poll 接 PAI 指令），
+        // 不用每次手動去「節點」分頁按啟動；否則語音叫手機工具會逾時。
+        if (Prefs(this).registerToken.isNotBlank()) {
+            try { GatewayService.start(this) } catch (_: Throwable) {}
+        }
         setContent { CyberTheme { RootScreen() } }
     }
 
