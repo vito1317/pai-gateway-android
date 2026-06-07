@@ -16,7 +16,7 @@ import android.widget.TextView
 /**
  * AI 操作手機時的系統級懸浮框：浮在所有 App 之上（包含 LINE 等），顯示「🤖 AI 操作中 + 目前動作」。
  * 需要 SYSTEM_ALERT_WINDOW（顯示在其他應用程式上層）權限。
- * McpTools 在執行 screen_*/maps_route 等操作時自動 show，閒置幾秒後自動 hide。
+ * McpTools 在執行 screen 操作、maps_route 等動作時自動 show，閒置幾秒後自動 hide。
  */
 object ControlOverlay {
     private val main = Handler(Looper.getMainLooper())
