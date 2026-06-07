@@ -184,8 +184,12 @@ private const val JS_SNAPSHOT = """
   var sel='a,button,input,textarea,select,[role=button],[role=link],[role=tab],[role=checkbox],[role=menuitem],[role=combobox],[role=option],[role=textbox],[onclick],[contenteditable=true],[tabindex]';
   function collect(doc){
     var cand=[].slice.call(doc.querySelectorAll(sel));
+    // cursor:pointer 補抓（給 React 把 div 當按鈕用的網站）。getComputedStyle 很貴，
+    // 大頁面（如 Google 結果頁有上千 div/span）全掃會卡死主執行緒導致逾時 →
+    // 限制最多掃 1200 個、候選夠 250 個就停，避免整個 navigate 爆逾時上限。
     var all=doc.querySelectorAll('div,span,li,label');
-    for(var k=0;k<all.length;k++){try{var el=all[k];if(getComputedStyle(el).cursor==='pointer'){var tx=(el.innerText||'').trim();if(tx&&tx.length<=40)cand.push(el);}}catch(e){}}
+    var scanMax=Math.min(all.length,1200);
+    for(var k=0;k<scanMax && cand.length<250;k++){try{var el=all[k];if(getComputedStyle(el).cursor==='pointer'){var tx=(el.innerText||'').trim();if(tx&&tx.length<=40)cand.push(el);}}catch(e){}}
     for(var j=0;j<cand.length;j++){
       var el=cand[j];var r=el.getBoundingClientRect();
       if(r.width<1||r.height<1)continue;
