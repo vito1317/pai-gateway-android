@@ -11,8 +11,10 @@ android {
         applicationId = "com.vito.gateway"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // 版本號自動化：CI 用 GitHub run number 遞增（每次更新程式自動 +1）
+        val ci = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+        versionCode = ci ?: 1
+        versionName = if (ci != null) "1.0.$ci" else "1.0-dev"
     }
     buildTypes {
         release {
@@ -28,6 +30,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"

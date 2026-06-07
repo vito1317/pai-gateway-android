@@ -171,13 +171,11 @@ fun GatewayTab() {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Text(
-                "PAI GATEWAY",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = CyberCyan,
-                letterSpacing = 2.sp
-            )
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("PAI GATEWAY", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = CyberCyan, letterSpacing = 2.sp)
+                Spacer(Modifier.width(8.dp))
+                Text("v${BuildConfig.VERSION_NAME}", fontSize = 12.sp, color = CyberGray)
+            }
         }
 
         // 狀態卡片
