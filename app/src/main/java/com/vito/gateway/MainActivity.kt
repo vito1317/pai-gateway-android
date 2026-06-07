@@ -13,15 +13,32 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,12 +48,34 @@ import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import org.json.JSONObject
 
+// ── 霓虹電馭風格主題 (Cyber/Neon) ──────────────────────────────────────────────────
+val CyberBackground = Color(0xFF0F172A)
+val CyberSurface = Color(0xFF1E293B)
+val CyberCyan = Color(0xFF00F0FF)
+val CyberPurple = Color(0xFF8B5CF6)
+val CyberGray = Color(0xFF94A3B8)
+
+@Composable
+fun CyberTheme(content: @Composable () -> Unit) {
+    val colorScheme = darkColorScheme(
+        primary = CyberCyan,
+        secondary = CyberPurple,
+        background = CyberBackground,
+        surface = CyberSurface,
+        onSurface = Color.White,
+        onPrimary = Color.Black
+    )
+    MaterialTheme(colorScheme = colorScheme) {
+        content()
+    }
+}
+
 class MainActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestRuntimePerms()
-        setContent { MaterialTheme(colorScheme = darkColorScheme()) { RootScreen() } }
+        setContent { CyberTheme { RootScreen() } }
     }
 
     private fun requestRuntimePerms() {
@@ -49,26 +88,46 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+enum class NavItem(val label: String, val icon: ImageVector) {
+    Node("節點", Icons.Default.Dns),
+    Voice("語音", Icons.Default.Mic),
+    Browser("瀏覽器", Icons.Default.Language)
+}
+
 @Composable
 fun RootScreen() {
-    var tab by remember { mutableStateOf(0) }
-    Column(Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = tab) {
-            Tab(tab == 0, { tab = 0 }, text = { Text("節點") })
-            Tab(tab == 1, { tab = 1 }, text = { Text("語音對話") })
-            Tab(tab == 2, { tab = 2 }, text = { Text("瀏覽器") })
+    var selectedItem by remember { mutableStateOf(NavItem.Node) }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar(containerColor = CyberBackground, contentColor = CyberCyan) {
+                NavItem.entries.forEach { item ->
+                    NavigationBarItem(
+                        selected = selectedItem == item,
+                        onClick = { selectedItem = item },
+                        icon = { Icon(item.icon, contentDescription = item.label) },
+                        label = { Text(item.label, fontSize = 10.sp) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = CyberCyan,
+                            unselectedIconColor = CyberGray,
+                            indicatorColor = CyberSurface
+                        )
+                    )
+                }
+            }
         }
-        Box(Modifier.fillMaxSize()) {
-            when (tab) {
-                0 -> GatewayTab()
-                1 -> VoiceTab()
-                2 -> BrowserTab()
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding).background(CyberBackground)) {
+            when (selectedItem) {
+                NavItem.Node -> GatewayTab()
+                NavItem.Voice -> VoiceTab()
+                NavItem.Browser -> BrowserTab()
             }
         }
     }
 }
 
-// ── 節點：一鍵配對 + 狀態 ──────────────────────────────────────────────────────
+// ── 節點儀表板 ────────────────────────────────────────────────────────────────
 @Composable
 fun GatewayTab() {
     val ctx = LocalContext.current
@@ -77,102 +136,335 @@ fun GatewayTab() {
     var token by remember { mutableStateOf(prefs.registerToken) }
     var node by remember { mutableStateOf(prefs.nodeName) }
     var pairCode by remember { mutableStateOf("") }
+    var showManual by remember { mutableStateOf(false) }
 
-    // QR 掃描配對：掃到的字串即配對碼 → 套用並啟動
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { res ->
         val c = res.contents
         if (!c.isNullOrBlank()) {
-            if (applyPairCode(c, prefs)) { paiBase = prefs.paiBase; token = prefs.registerToken; pairWithStart(ctx, prefs) }
-            else GatewayState.log("QR 內容不是有效配對碼")
+            if (applyPairCode(c, prefs)) {
+                paiBase = prefs.paiBase; token = prefs.registerToken
+                pairWithStart(ctx, prefs)
+            } else GatewayState.log("QR 內容不是有效配對碼")
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(14.dp)) {
-        Text("PAI Gateway · Android", fontSize = 20.sp)
-        Spacer(Modifier.height(6.dp))
-        StatusRow("狀態", if (GatewayState.running.value) "🟢 運行中" else "🔴 停止")
-        StatusRow("公網網址", GatewayState.publicUrl.value.ifEmpty { GatewayState.localUrl.value.ifEmpty { "—" } })
-        StatusRow("註冊", GatewayState.regStatus.value)
-
-        Spacer(Modifier.height(10.dp))
-        // 掃描 QR 一鍵配對（PAI 開 /api/gateway/pair-code 顯示 QR）
-        Button(
-            onClick = {
-                scanLauncher.launch(ScanOptions().apply {
-                    setPrompt("掃描 PAI 配對 QR")
-                    setBeepEnabled(false)
-                    setOrientationLocked(false)
-                    setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                })
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("📷 掃描 QR 一鍵配對") }
-
-        // 或貼上配對碼
-        OutlinedTextField(pairCode, { pairCode = it },
-            label = { Text("或貼上配對碼") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-        OutlinedButton(
-            onClick = {
-                val ok = applyPairCode(pairCode, prefs)
-                if (ok) { paiBase = prefs.paiBase; token = prefs.registerToken; pairWithStart(ctx, prefs) }
-                else GatewayState.log("配對碼格式不正確")
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("🔗 配對並啟動") }
-
-        Spacer(Modifier.height(12.dp))
-        Text("或手動設定：", fontSize = 12.sp)
-        OutlinedTextField(paiBase, { paiBase = it; prefs.paiBase = it },
-            label = { Text("PAI 網址") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(token, { token = it; prefs.registerToken = it },
-            label = { Text("註冊 Token") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(node, { node = it; prefs.nodeName = it },
-            label = { Text("節點名稱") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-
-        Spacer(Modifier.height(8.dp))
-        Row {
-            Button(onClick = { pairWithStart(ctx, prefs) }, enabled = !GatewayState.running.value) { Text("啟動並串接") }
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { GatewayService.stop(ctx) }, enabled = GatewayState.running.value) { Text("停止") }
+    LazyColumn(
+        Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(top = 20.dp, bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text(
+                "PAI GATEWAY",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = CyberCyan,
+                letterSpacing = 2.sp
+            )
         }
 
-        Spacer(Modifier.height(8.dp))
-        Text("日誌", fontSize = 12.sp)
-        LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
-            items(GatewayState.logs) { Text(it, fontSize = 11.sp) }
+        // 狀態卡片
+        item {
+            CyberCard {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        StatusPulse(GatewayState.running.value)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            if (GatewayState.running.value) "服務運行中" else "服務已停止",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    StatusDetail("公網網址", GatewayState.publicUrl.value.ifEmpty { GatewayState.localUrl.value.ifEmpty { "未分配" } })
+                    StatusDetail("註冊狀態", GatewayState.regStatus.value)
+                    
+                    Spacer(Modifier.height(16.dp))
+                    Row(Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { pairWithStart(ctx, prefs) },
+                            enabled = !GatewayState.running.value,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = Color.Black),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(4.dp))
+                            Text("啟動")
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        OutlinedButton(
+                            onClick = { GatewayService.stop(ctx) },
+                            enabled = GatewayState.running.value,
+                            modifier = Modifier.weight(1f),
+                            border = ButtonDefaults.outlinedButtonBorder.copy(brush = SolidColor(CyberPurple)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberPurple),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Stop, null); Spacer(Modifier.width(4.dp))
+                            Text("停止")
+                        }
+                    }
+                }
+            }
+        }
+
+        // 一鍵配對卡片
+        item {
+            CyberCard {
+                Column(Modifier.padding(16.dp)) {
+                    Text("快速配對", color = CyberCyan, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            scanLauncher.launch(ScanOptions().apply {
+                                setPrompt("掃描 PAI 配對 QR")
+                                setBeepEnabled(false)
+                                setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                            })
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = CyberSurface, contentColor = CyberCyan),
+                        border = Row(Modifier.border(1.dp, CyberCyan, RoundedCornerShape(8.dp))).let { null }, // placeholder
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("掃描 QR Code")
+                    }
+                    
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = pairCode,
+                        onValueChange = { pairCode = it },
+                        label = { Text("貼上配對碼", color = CyberGray) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyberPurple,
+                            unfocusedBorderColor = CyberSurface,
+                            focusedLabelColor = CyberPurple
+                        ),
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                if (applyPairCode(pairCode, prefs)) {
+                                    paiBase = prefs.paiBase; token = prefs.registerToken; pairWithStart(ctx, prefs)
+                                } else GatewayState.log("配對碼格式錯誤")
+                            }) { Icon(Icons.Default.Link, contentDescription = null, tint = CyberCyan) }
+                        }
+                    )
+                }
+            }
+        }
+
+        // 手動設定（可摺疊）
+        item {
+            Column {
+                TextButton(onClick = { showManual = !showManual }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (showManual) "收起手動設定 ▲" else "展開手動設定 ▼", color = CyberGray, fontSize = 12.sp)
+                }
+                AnimatedVisibility(visible = showManual) {
+                    CyberCard {
+                        Column(Modifier.padding(16.dp)) {
+                            ManualField("PAI 網址", paiBase) { paiBase = it; prefs.paiBase = it }
+                            ManualField("註冊 Token", token) { token = it; prefs.registerToken = it }
+                            ManualField("節點名稱", node) { node = it; prefs.nodeName = it }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 日誌終端機
+        item {
+            Text("日誌輸出", color = CyberGray, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+            Spacer(Modifier.height(4.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Black)
+                    .border(1.dp, CyberSurface, RoundedCornerShape(8.dp))
+                    .padding(8.dp)
+            ) {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(GatewayState.logs) { log ->
+                        Text(
+                            log,
+                            color = if (log.contains("Err", true)) Color.Red else Color.Green,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
+@Composable
+fun CyberCard(content: @Composable () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = CyberSurface,
+        border = BorderStroke(1.dp, CyberBackground.copy(alpha = 0.5f)),
+        shadowElevation = 4.dp
+    ) {
+        content()
+    }
+}
+
+@Composable
+fun StatusPulse(active: Boolean) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = if (active) 1.4f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = if (active) 0.3f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+
+    Box(contentAlignment = Alignment.Center) {
+        if (active) {
+            Box(
+                Modifier
+                    .size(12.dp)
+                    .graphicsLayer(scaleX = scale, scaleY = scale, alpha = alpha)
+                    .background(CyberCyan, CircleShape)
+            )
+        }
+        Box(
+            Modifier
+                .size(10.dp)
+                .background(if (active) CyberCyan else Color.Red, CircleShape)
+                .border(2.dp, Color.Black.copy(alpha = 0.2f), CircleShape)
+        )
+    }
+}
+
+@Composable
+fun StatusDetail(label: String, value: String) {
+    Column(Modifier.padding(vertical = 4.dp)) {
+        Text(label, color = CyberGray, fontSize = 12.sp)
+        Text(value, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+fun ManualField(label: String, value: String, onValueChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label, fontSize = 12.sp) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+        colors = OutlinedTextFieldDefaults.colors(
+            unfocusedBorderColor = CyberBackground,
+            focusedBorderColor = CyberCyan
+        )
+    )
+}
+
 // ── 語音對話：內嵌 /voice（喚醒/打斷/操控全功能）+ 麥克風授權 ─────────────────────
-@SuppressLint("SetJavaScriptEnabled")
+// ── 原生語音對話（能量球 + 字幕，直連 voice_server，免登入）────────────────────
 @Composable
 fun VoiceTab() {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
-    AndroidView(modifier = Modifier.fillMaxSize(), factory = { c ->
-        WebView(c).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.mediaPlaybackRequiresUserGesture = false  // 允許自動播放 TTS
-            webChromeClient = object : WebChromeClient() {
-                override fun onPermissionRequest(request: PermissionRequest) {
-                    // 授予網頁麥克風權限（語音對話需要）
-                    request.grant(request.resources)
-                }
+    var wake by remember { mutableStateOf(false) }
+    val active = VoiceEngine.active.value
+    val speaking = VoiceEngine.speaking.value
+    val vol = VoiceEngine.volume.value
+
+    DisposableEffect(Unit) { onDispose { VoiceEngine.stop() } }
+
+    // 能量球脈動
+    val infinite = rememberInfiniteTransition(label = "orb")
+    val pulse by infinite.animateFloat(
+        initialValue = 0.92f, targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse"
+    )
+    val orbScale = if (active) (1f + vol * 1.5f).coerceAtMost(1.6f) * pulse else 1f
+    val orbColor = when {
+        speaking -> CyberPurple
+        active -> CyberCyan
+        else -> CyberGray
+    }
+
+    Column(
+        Modifier.fillMaxSize().background(CyberBackground).padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("語音對話", color = CyberCyan, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("喚醒", color = CyberGray, fontSize = 12.sp)
+                Switch(checked = wake, onCheckedChange = { wake = it }, enabled = !active)
             }
-            webViewClient = WebViewClient()
-            loadUrl(prefs.paiBase.trimEnd('/') + "/voice")
         }
-    })
+
+        Spacer(Modifier.weight(1f))
+        // 能量球
+        Box(Modifier.size(180.dp), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(150.dp).scale(orbScale).clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(orbColor.copy(alpha = 0.9f), orbColor.copy(alpha = 0.15f))))
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(VoiceEngine.status.value, color = CyberGray, fontSize = 13.sp)
+        Spacer(Modifier.weight(0.4f))
+
+        // 字幕
+        if (VoiceEngine.steps.value.isNotEmpty())
+            Text(VoiceEngine.steps.value, color = CyberCyan.copy(alpha = 0.7f), fontSize = 11.sp)
+        if (VoiceEngine.userText.value.isNotEmpty())
+            Text("你：${VoiceEngine.userText.value}", color = CyberGray, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+        if (VoiceEngine.transcript.value.isNotEmpty())
+            Text(VoiceEngine.transcript.value, color = Color.White, fontSize = 15.sp,
+                modifier = Modifier.padding(top = 6.dp).verticalScroll(rememberScrollState()).heightIn(max = 160.dp))
+
+        Spacer(Modifier.weight(1f))
+        // 控制列
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            if (active) {
+                IconButton(
+                    onClick = { VoiceEngine.toggleMute() },
+                    modifier = Modifier.size(52.dp).clip(CircleShape).background(CyberSurface)
+                ) { Icon(if (VoiceEngine.isMuted()) Icons.Default.MicOff else Icons.Default.Mic, "mute", tint = CyberGray) }
+            }
+            // 主按鈕：開始/結束通話
+            IconButton(
+                onClick = { if (active) VoiceEngine.stop() else VoiceEngine.start(prefs.paiBase, wake) },
+                modifier = Modifier.size(72.dp).clip(CircleShape)
+                    .background(if (active) Color(0xFFEF4444) else CyberCyan)
+            ) { Icon(if (active) Icons.Default.Close else Icons.Default.Call, "call", tint = Color.Black, modifier = Modifier.size(32.dp)) }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
 }
 
 // ── 瀏覽器：AI 操作會顯示在這（內建受控瀏覽器）─────────────────────────────────
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun BrowserTab() {
-    AndroidView(modifier = Modifier.fillMaxSize(), factory = { c ->
+    AndroidView(modifier = Modifier.fillMaxSize().background(CyberBackground), factory = { c ->
         WebView(c).apply {
+            setBackgroundColor(0) // Transparent
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.databaseEnabled = true
@@ -189,14 +481,6 @@ fun BrowserTab() {
             BrowserController.attach(this)
         }
     })
-}
-
-@Composable
-private fun StatusRow(k: String, v: String) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("$k：", fontSize = 13.sp, modifier = Modifier.width(80.dp))
-        Text(v, fontSize = 13.sp)
-    }
 }
 
 /** 配對碼：base64 或 JSON of {pai, token, name?}。回 true=解析成功並已寫入 prefs。 */

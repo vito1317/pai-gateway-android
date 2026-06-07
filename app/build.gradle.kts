@@ -55,4 +55,6 @@ dependencies {
     implementation("org.json:json:20240303")
     // QR 掃描配對
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    // 全雙工語音（Socket.IO 連 voice_server）
+    implementation("io.socket:socket.io-client:2.1.0") { exclude(group = "org.json", module = "json") }
 }
