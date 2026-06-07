@@ -485,8 +485,8 @@ fun VoiceTab() {
         if (VoiceEngine.userText.value.isNotEmpty())
             Text("你：${VoiceEngine.userText.value}", color = CyberGray, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         if (VoiceEngine.transcript.value.isNotEmpty())
-            Text(VoiceEngine.transcript.value, color = Color.White, fontSize = 15.sp,
-                modifier = Modifier.padding(top = 6.dp).verticalScroll(rememberScrollState()).heightIn(max = 160.dp))
+            Text(renderMarkdown(VoiceEngine.transcript.value), color = Color.White, fontSize = 15.sp,
+                modifier = Modifier.padding(top = 6.dp).verticalScroll(rememberScrollState()).heightIn(max = 200.dp))
 
         Spacer(Modifier.weight(1f))
         // 控制列
