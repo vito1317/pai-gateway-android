@@ -6,31 +6,31 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
 
 /**
  * 輕量 Markdown → AnnotatedString（給語音字幕 / 文件彈窗 / 迷你卡用）。
- * 支援：# 標題（依層級放大字級）、**粗體**、*斜體*、~~刪除線~~、`行內 code`、```程式碼區塊```、
- *       清單（- / 數字 轉圓點）、[文字](網址) 連結只留文字、表格分隔行清掉、LaTeX 轉純文字。
+ * 支援：# 標題（依層級放大字級）、粗體、斜體、刪除線、行內 code、程式碼區塊（等寬）、
+ *       清單（- / 數字 轉圓點）、連結只留文字、表格分隔行清掉、LaTeX 轉純文字。
  * 不依賴外部庫，避免編譯風險。
  */
 fun renderMarkdown(src: String): AnnotatedString = buildAnnotatedString {
+    val b = this
     val tableSep = Regex("^\\s*\\|?[\\s:|\\-]+\\|?\\s*$")
     val heading = Regex("^\\s*(#{1,6})\\s*")
     val lines = src.split("\n")
     var inCode = false
     lines.forEachIndexed { idx, raw0 ->
         var line = raw0
-        // 程式碼區塊圍籬 ``` → 切換等寬模式、本行不顯示圍籬
-        if (line.trimStart().startsWith("```")) {
+        if (line.trimStart().startsWith("```")) { // ``` 程式碼區塊圍籬
             inCode = !inCode
-            if (idx < lines.size - 1) append("\n")
+            if (idx < lines.size - 1) b.append("\n")
             return@forEachIndexed
         }
         if (inCode) {
-            withStyle(SpanStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)) { append(line) }
-            if (idx < lines.size - 1) append("\n")
+            b.withStyle(SpanStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)) { b.append(line) }
+            if (idx < lines.size - 1) b.append("\n")
             return@forEachIndexed
         }
         if (line.contains("|") && tableSep.matches(line)) return@forEachIndexed // 表格分隔行丟掉
@@ -38,9 +38,9 @@ fun renderMarkdown(src: String): AnnotatedString = buildAnnotatedString {
         line = line.replace(Regex("\\\\(?:long)?(?:right)?arrow|\\\\to\\b"), "→")
             .replace(Regex("\\\\times"), "×").replace(Regex("\\\\[a-zA-Z]+"), "")
             .replace(Regex("\\$(?!\\s*\\d)"), "")
-        // 連結 [文字](網址) → 只留文字
-        line = line.replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "$1")
-            .replace(Regex("!\\[[^\\]]*]\\([^)]*\\)"), "")
+        // 連結 [文字](網址) → 只留文字；圖片整段移除
+        line = line.replace(Regex("!\\[[^\\]]*]\\([^)]*\\)"), "")
+            .replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "$1")
         // 標題層級 → 字級
         var headSize: TextUnit = TextUnit.Unspecified
         val hm = heading.find(line)
@@ -51,10 +51,10 @@ fun renderMarkdown(src: String): AnnotatedString = buildAnnotatedString {
         }
         line = line.replace(Regex("^\\s*[-*+]\\s+"), "• ")
             .replace(Regex("^\\s*\\d+[.)]\\s+"), "• ")
-            .replace(Regex(">\\s?"), "")
+            .replace(Regex("^>\\s?"), "")
             .replace(Regex("\\s*\\|\\s*"), "  ")
-        appendInline(this, line, headSize)
-        if (idx < lines.size - 1) append("\n")
+        appendInline(b, line, headSize)
+        if (idx < lines.size - 1) b.append("\n")
     }
 }
 
@@ -64,7 +64,6 @@ private fun appendInline(
     headSize: TextUnit,
 ) {
     val isHeading = headSize != TextUnit.Unspecified
-    // **粗體** / *斜體* / ~~刪除線~~ / `code`
     val token = Regex("\\*\\*(.+?)\\*\\*|\\*(.+?)\\*|~~(.+?)~~|`(.+?)`")
     var i = 0
     val baseStyle = if (isHeading) SpanStyle(fontWeight = FontWeight.Bold, fontSize = headSize) else SpanStyle()
