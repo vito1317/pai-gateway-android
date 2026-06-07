@@ -42,6 +42,33 @@ object DeviceTools {
         } catch (e: Throwable) { "定位失敗：${e.message}" }
     }
 
+    /** 取最近一次已知座標（即時、可能為 null）。給語音 geo 用。 */
+    fun latLng(ctx: Context): Pair<Double, Double>? {
+        return try {
+            val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            var best: android.location.Location? = null
+            for (p in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)) {
+                try { val l = lm.getLastKnownLocation(p) ?: continue; if (best == null || l.time > best!!.time) best = l } catch (_: SecurityException) {}
+            }
+            best?.let { it.latitude to it.longitude }
+        } catch (_: Throwable) { null }
+    }
+
+    /** 主動要一次新定位（lastKnown 為空時用），拿到就回呼一次。 */
+    fun requestFreshLocation(ctx: Context, cb: (Double, Double) -> Unit) {
+        try {
+            val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val listener = object : android.location.LocationListener {
+                override fun onLocationChanged(l: android.location.Location) { cb(l.latitude, l.longitude); try { lm.removeUpdates(this) } catch (_: Throwable) {} }
+                override fun onProviderEnabled(p: String) {}
+                override fun onProviderDisabled(p: String) {}
+                override fun onStatusChanged(p: String?, s: Int, e: android.os.Bundle?) {}
+            }
+            val prov = if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) LocationManager.GPS_PROVIDER else LocationManager.NETWORK_PROVIDER
+            main.post { try { @Suppress("DEPRECATION") lm.requestSingleUpdate(prov, listener, null) } catch (_: SecurityException) {} catch (_: Throwable) {} }
+        } catch (_: Throwable) {}
+    }
+
     fun notify(ctx: Context, title: String, text: String): String {
         return try {
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -169,6 +196,31 @@ object DeviceTools {
             ui { ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(u)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             "已開啟連結"
         } catch (e: Throwable) { "開啟失敗：${e.message}" }
+    }
+
+    /** 在原生 Google 地圖 App 顯示路線（WebView 渲染不出地圖，原生 App 一定行）。
+     *  destination 必填；origin 空白＝從目前位置；waypoints 用「|」分隔多個途經點。 */
+    fun mapsRoute(ctx: Context, origin: String, destination: String, waypoints: String, mode: String): String {
+        return try {
+            val enc = { s: String -> android.net.Uri.encode(s) }
+            val sb = StringBuilder("https://www.google.com/maps/dir/?api=1")
+            if (origin.isNotBlank()) sb.append("&origin=").append(enc(origin))
+            sb.append("&destination=").append(enc(destination))
+            if (waypoints.isNotBlank()) sb.append("&waypoints=").append(enc(waypoints))
+            sb.append("&travelmode=").append(if (mode.isBlank()) "driving" else mode)
+            val uri = android.net.Uri.parse(sb.toString())
+            ui {
+                // 優先丟給 Google 地圖 App；沒裝才退回一般瀏覽器
+                try {
+                    ctx.startActivity(Intent(Intent.ACTION_VIEW, uri)
+                        .setPackage("com.google.android.apps.maps").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (e: Throwable) {
+                    ctx.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }
+            "已在 Google 地圖顯示路線：" + (if (origin.isBlank()) "目前位置" else origin) +
+                " → $destination" + (if (waypoints.isNotBlank()) "（途經 ${waypoints.replace("|", "、")}）" else "")
+        } catch (e: Throwable) { "開啟地圖路線失敗：${e.message}" }
     }
 
     fun shareText(ctx: Context, text: String): String {

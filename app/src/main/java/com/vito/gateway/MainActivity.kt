@@ -555,7 +555,7 @@ fun VoiceTab() {
             }
             // 主按鈕：開始/結束通話
             IconButton(
-                onClick = { if (active) VoiceEngine.stop() else VoiceEngine.start(prefs.paiBase, wake) },
+                onClick = { if (active) VoiceEngine.stop() else VoiceEngine.start(ctx, prefs.paiBase, wake) },
                 modifier = Modifier.size(72.dp).clip(CircleShape)
                     .background(if (active) Color(0xFFEF4444) else CyberCyan)
             ) { Icon(if (active) Icons.Default.Close else Icons.Default.Call, "call", tint = Color.Black, modifier = Modifier.size(32.dp)) }

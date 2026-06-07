@@ -39,6 +39,10 @@ object VoiceEngine {
     @Volatile private var bargeIn = true
     @Volatile private var loggedAudioType = false
     @Volatile private var loggedAudio = false
+    private var appCtx: android.content.Context? = null
+    @Volatile private var wakeMode = false
+    @Volatile private var session = ""
+    @Volatile private var geo: Pair<Double, Double>? = null
 
     private const val IN_RATE = 16000
     private const val OUT_RATE = 24000
@@ -47,11 +51,17 @@ object VoiceEngine {
     fun toggleMute() { muted.value = !muted.value }
     fun isMuted() = muted.value
 
-    fun start(paiBase: String, wake: Boolean) {
+    fun start(ctx: android.content.Context, paiBase: String, wake: Boolean) {
         if (active.value) return
         active.value = true
         status.value = "連線中…"
         transcript.value = ""; userText.value = ""; steps.value = ""
+        appCtx = ctx.applicationContext
+        wakeMode = wake
+        session = "android-" + System.currentTimeMillis()
+        // 抓定位給 geo（附近搜尋/天氣用）：先用 lastKnown，沒有就主動要一次新定位再補送
+        geo = DeviceTools.latLng(appCtx!!)
+        if (geo == null) DeviceTools.requestFreshLocation(appCtx!!) { la, lo -> geo = la to lo; sendPromptUpdate() }
         try {
             val origin = paiBase.trimEnd('/')
             val opts = IO.Options().apply {
@@ -64,12 +74,7 @@ object VoiceEngine {
             socket = s
             s.on(Socket.EVENT_CONNECT) {
                 status.value = "已連線 · 請說話"
-                val p = JSONObject().apply {
-                    put("mode", "hybrid"); put("conversation_id", JSONObject.NULL)
-                    put("prompt", ""); put("session", "android-" + System.currentTimeMillis())
-                    put("wake", wake); put("bargeIn", bargeIn)
-                }
-                s.emit("prompt_text", p)
+                s.emit("prompt_text", buildPrompt())
                 s.emit("recording-started")
                 startRecording()
             }
@@ -101,6 +106,19 @@ object VoiceEngine {
         } catch (e: Throwable) {
             status.value = "錯誤：${e.message}"; active.value = false
         }
+    }
+
+    /** 組 prompt_text（帶 geo）。session 維持不變 → 重送只更新 geo 不會另開對話。 */
+    private fun buildPrompt(): JSONObject = JSONObject().apply {
+        put("mode", "hybrid"); put("conversation_id", JSONObject.NULL)
+        put("prompt", ""); put("session", session)
+        put("wake", wakeMode); put("bargeIn", bargeIn)
+        geo?.let { put("geo", JSONObject().put("lat", it.first).put("lng", it.second)) }
+    }
+
+    /** 拿到新定位後補送（同 session，伺服器只更新 geo）。 */
+    private fun sendPromptUpdate() {
+        try { if (active.value) socket?.emit("prompt_text", buildPrompt()) } catch (_: Throwable) {}
     }
 
     /** 累積處理序列：每步一行、去掉連續重複、最多保留最近 12 步。 */

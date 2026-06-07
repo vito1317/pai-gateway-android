@@ -48,6 +48,9 @@ object McpTools {
         tool("vibrate", "讓手機震動。", JSONObject().put("ms", n("毫秒，預設500")))
         tool("battery_status", "查手機電量與充電狀態。", JSONObject())
         tool("open_app", "開啟手機上的 app（LINE/YouTube/地圖/Chrome/Spotify/設定/相機…）。", JSONObject().put("name", s("app 名稱")), JSONArray().put("name"))
+        tool("maps_route", "在原生 Google 地圖 App【顯示路線/導航】（要在地圖上看到路線就用這個，內建瀏覽器渲染不出地圖）。destination 必填；origin 留空=從目前位置；waypoints 多個途經點用「|」分隔；mode=driving/walking/transit/bicycling。",
+            JSONObject().put("origin", s("起點，留空=目前位置")).put("destination", s("終點")).put("waypoints", s("途經點，用|分隔")).put("mode", s("交通方式 driving/walking/transit/bicycling")),
+            JSONArray().put("destination"))
         tool("share_text", "用手機分享選單把文字/連結分享出去。", JSONObject().put("text", s("文字")), JSONArray().put("text"))
         tool("phone_speak", "用手機系統語音念出文字（手機 TTS）。", JSONObject().put("text", s("文字")), JSONArray().put("text"))
         tool("phone_toast", "在手機螢幕顯示一則浮動提示。", JSONObject().put("text", s("文字")), JSONArray().put("text"))
@@ -84,6 +87,7 @@ object McpTools {
             "vibrate" -> DeviceTools.vibrate(ctx, args.optLong("ms", 500))
             "battery_status" -> DeviceTools.battery(ctx)
             "open_app" -> DeviceTools.openApp(ctx, args.optString("name"))
+            "maps_route" -> DeviceTools.mapsRoute(ctx, args.optString("origin"), args.optString("destination"), args.optString("waypoints"), args.optString("mode"))
             "share_text" -> DeviceTools.shareText(ctx, args.optString("text"))
             "phone_speak" -> DeviceTools.speak(ctx, args.optString("text"))
             "phone_toast" -> DeviceTools.toast(ctx, args.optString("text"))
