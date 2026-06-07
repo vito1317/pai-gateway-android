@@ -40,24 +40,39 @@ object BrowserController {
     }
 
     fun ensureWebView(ctx: Context): WebView {
+        val onMainThread = Looper.myLooper() == Looper.getMainLooper()
         val act = ctx as? android.app.Activity
         webView?.let { existing ->
             // 若現有 WebView 不是用 Activity context 建的（JS 引擎可能不活躍），而現在拿得到 Activity → 銷毀重建
             if (act == null || ctxWrapper?.baseContext is android.app.Activity) return existing
             GatewayState.log("用 Activity context 重建 WebView…")
-            val latch0 = CountDownLatch(1)
-            main.post { try { (existing.parent as? android.view.ViewGroup)?.removeView(existing); existing.destroy() } catch (_: Throwable) {}; webView = null; latch0.countDown() }
-            latch0.await(3, TimeUnit.SECONDS)
+            val destroy = {
+                try { (existing.parent as? android.view.ViewGroup)?.removeView(existing); existing.destroy() } catch (_: Throwable) {}
+                webView = null
+            }
+            if (onMainThread) destroy()
+            else { val l0 = CountDownLatch(1); main.post { destroy(); l0.countDown() }; l0.await(3, TimeUnit.SECONDS) }
         }
-        val appCtx = ctx.applicationContext
+        // 已在主執行緒 → 直接建（不能 post 後又在主執行緒 await，會死鎖、啟動閃退）
+        if (onMainThread) return buildWebView(ctx).also { webView = it }
         val latch = CountDownLatch(1)
         main.post {
-            try {
-                // 用 MutableContextWrapper：優先用 Activity context（JS 渲染引擎需要它，用 application context
-                // 會讓 evaluateJavascript 的 callback 永遠不回 → read/snapshot 卡死）。沒有 Activity 才退而用 app。
-                val wrapper = android.content.MutableContextWrapper((ctx as? android.app.Activity) ?: appCtx)
-                ctxWrapper = wrapper
-                val w = WebView(wrapper)
+            try { webView = buildWebView(ctx) }
+            catch (e: Throwable) { GatewayState.log("WebView 建立失敗：${e.message}") }
+            latch.countDown()
+        }
+        latch.await(8, TimeUnit.SECONDS)
+        return webView ?: throw IllegalStateException("WebView 尚未就緒")
+    }
+
+    /** 實際建立 WebView（必須在主執行緒呼叫）。 */
+    private fun buildWebView(ctx: Context): WebView {
+        val appCtx = ctx.applicationContext
+        // 用 MutableContextWrapper：優先用 Activity context（JS 渲染引擎需要它，用 application context
+        // 會讓 evaluateJavascript 的 callback 永遠不回 → read/snapshot 卡死）。沒有 Activity 才退而用 app。
+        val wrapper = android.content.MutableContextWrapper((ctx as? android.app.Activity) ?: appCtx)
+        ctxWrapper = wrapper
+        val w = WebView(wrapper)
                 w.settings.javaScriptEnabled = true
                 w.settings.domStorageEnabled = true
                 w.settings.databaseEnabled = true
@@ -113,14 +128,7 @@ object BrowserController {
                 // 讓 WebView 在背景/未掛載分頁時也保持 active（JS 計時器、頁面載入不被凍結）
                 try { w.resumeTimers(); w.onResume() } catch (_: Throwable) {}
                 w.loadUrl("https://www.google.com")
-                webView = w
-            } catch (e: Throwable) {
-                GatewayState.log("WebView 建立失敗：${e.message}")
-            }
-            latch.countDown()
-        }
-        latch.await(8, TimeUnit.SECONDS)
-        return webView ?: throw IllegalStateException("WebView 尚未就緒")
+        return w
     }
 
     /** 在主執行緒同步執行 WebView 動作並取回字串結果（背景 server thread 呼叫）。 */
