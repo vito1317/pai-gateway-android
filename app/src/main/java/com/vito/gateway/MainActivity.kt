@@ -674,7 +674,11 @@ fun VoiceTab() {
 
         // 拍照給 AI 看（TakePicturePreview 直接回縮圖 Bitmap）
         val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
-            if (bmp != null) VisionClient.analyze(ctx, bmp, "請看這張照片，用台灣正體中文說明你看到什麼。")
+            if (bmp != null) {
+                // 語音對話進行中 → 把照片掛進對話（之後直接講話追問）；否則一次性看圖
+                if (VoiceEngine.active.value) VisionClient.attachToVoice(ctx, bmp)
+                else VisionClient.analyze(ctx, bmp, "請看這張照片，用台灣正體中文說明你看到什麼。")
+            }
         }
 
         Spacer(Modifier.height(8.dp))
