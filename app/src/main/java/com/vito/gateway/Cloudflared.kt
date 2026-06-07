@@ -33,7 +33,9 @@ object Cloudflared {
             val p = pb.start()
             proc = p
             Thread {
-                val urlPat = Pattern.compile("https://[a-z0-9.-]+\\.trycloudflare\\.com")
+                // 只抓真正的 quick tunnel 網址（子網域含 dash，如 xxx-yyy-zzz）；
+                // 排除 cloudflared 連線用的 api.trycloudflare.com（無 dash）
+                val urlPat = Pattern.compile("https://[a-z0-9]+(?:-[a-z0-9]+)+\\.trycloudflare\\.com")
                 p.inputStream.bufferedReader().forEachLine { line ->
                     onLog(line)
                     val m = urlPat.matcher(line)

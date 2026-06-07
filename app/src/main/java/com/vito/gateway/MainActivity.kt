@@ -15,12 +15,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -225,7 +228,7 @@ fun GatewayTab() {
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = CyberSurface, contentColor = CyberCyan),
-                        border = Row(Modifier.border(1.dp, CyberCyan, RoundedCornerShape(8.dp))).let { null }, // placeholder
+                        border = BorderStroke(1.dp, CyberCyan),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Icon(Icons.Default.QrCodeScanner, null)
