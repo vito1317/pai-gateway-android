@@ -81,6 +81,8 @@ object BrowserController {
                 val hSpec = android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY)
                 w.measure(wSpec, hSpec)
                 w.layout(0, 0, 1080, 1920)
+                // 讓 WebView 在背景/未掛載分頁時也保持 active（JS 計時器、頁面載入不被凍結）
+                try { w.resumeTimers(); w.onResume() } catch (_: Throwable) {}
                 w.loadUrl("https://www.google.com")
                 webView = w
             } catch (e: Throwable) {
@@ -100,6 +102,9 @@ object BrowserController {
         var result: T? = null
         main.post {
             try {
+                // 關鍵：App 不在前景 / WebView 沒掛在可見分頁時，Android 會凍住 WebView 的 JS 計時器與載入
+                // （頁面永遠載不完 → loadUrl/snapshot/read 卡到逾時）。每次操作前喚醒，確保背景也能跑。
+                try { wv.resumeTimers(); wv.onResume() } catch (_: Throwable) {}
                 block(wv) { r -> result = r; latch.countDown() }
             } catch (e: Throwable) {
                 latch.countDown()
