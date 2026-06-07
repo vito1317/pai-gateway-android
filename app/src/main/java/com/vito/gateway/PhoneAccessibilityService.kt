@@ -42,8 +42,20 @@ class PhoneAccessibilityService : AccessibilityService() {
     @Volatile private var lastEls: List<El> = emptyList()
 
     override fun onServiceConnected() {
+        try {
+            // 顯式設定 serviceInfo（部分 OEM 如小米/HyperOS 需要程式端設定才不會判定「服務異常」）
+            serviceInfo = android.accessibilityservice.AccessibilityServiceInfo().apply {
+                eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                feedbackType = android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_GENERIC
+                flags = android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+                notificationTimeout = 100
+                capabilities = android.accessibilityservice.AccessibilityServiceInfo.CAPABILITY_CAN_RETRIEVE_WINDOW_CONTENT or
+                    android.accessibilityservice.AccessibilityServiceInfo.CAPABILITY_CAN_PERFORM_GESTURES
+            }
+        } catch (_: Throwable) {}
         instance = this
-        GatewayState.log("♿ 螢幕操作（輔助使用）已連接")
+        try { GatewayState.log("♿ 螢幕操作（輔助使用）已連接") } catch (_: Throwable) {}
     }
 
     override fun onDestroy() { if (instance === this) instance = null; super.onDestroy() }
