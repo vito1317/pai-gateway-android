@@ -98,7 +98,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleNotice(intent: android.content.Intent?) {
-        intent?.getStringExtra("notice_text")?.let { if (it.isNotEmpty()) GatewayState.noticeText.value = it }
+        intent?.getStringExtra("notice_text")?.let {
+            if (it.isNotEmpty()) {
+                // 先設標題（沒帶就用預設），避免沿用上一則（如「看圖結果」）的舊標題
+                GatewayState.noticeTitle.value = intent.getStringExtra("notice_title")?.ifEmpty { "PAI 通知" } ?: "PAI 通知"
+                GatewayState.noticeUrl.value = ""
+                GatewayState.noticeText.value = it
+            }
+        }
     }
 
     private fun requestRuntimePerms() {
