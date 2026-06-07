@@ -32,6 +32,7 @@ object McpTools {
             JSONArray().put("text"))
         tool("browser_read", "讀取當前頁面可見文字（擷取/摘要用）。", JSONObject())
         tool("browser_back", "瀏覽器上一頁。", JSONObject())
+        tool("browser_reload", "重新載入當前網頁（頁面空白/載入失敗/地圖沒渲染時用）。", JSONObject())
         tool("browser_current_url", "取得目前網址。", JSONObject())
         tool("open_url", "用系統預設 app 開啟網址（例如丟給 Chrome、地圖、YouTube）。",
             JSONObject().put("url", s("網址")), JSONArray().put("url"))
@@ -69,6 +70,7 @@ object McpTools {
             "browser_type" -> BrowserController.type(args.optString("target"), args.optString("text"), args.optBoolean("submit"))
             "browser_read" -> BrowserController.readText()
             "browser_back" -> BrowserController.back()
+            "browser_reload" -> BrowserController.reload()
             "browser_current_url" -> BrowserController.currentUrl().ifEmpty { "（尚未開啟網頁）" }
             "open_url" -> openUrl(ctx, args.optString("url"))
             "device_info" -> deviceInfo(ctx)

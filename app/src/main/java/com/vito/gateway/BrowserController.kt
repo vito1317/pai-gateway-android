@@ -140,6 +140,12 @@ object BrowserController {
         return "已返回 ${currentUrl()}\n\n" + snapshot()
     }
 
+    fun reload(): String {
+        onMain<Unit>(10) { wv, done -> wv.reload(); done(Unit) }
+        Thread.sleep(2500)
+        return "已重新載入 ${currentUrl()}\n\n" + snapshot()
+    }
+
     /** 掃描可互動元素，回給 AI 的清單（含 [eN] 編號）。元素過少自動重抓（SPA 慢）。 */
     fun snapshot(): String {
         var json = "{}"

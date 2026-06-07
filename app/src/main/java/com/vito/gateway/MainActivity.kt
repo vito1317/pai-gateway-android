@@ -568,11 +568,19 @@ fun VoiceTab() {
 @Composable
 fun BrowserTab() {
     val ctx = LocalContext.current
-    AndroidView(modifier = Modifier.fillMaxSize().background(CyberBackground), factory = { c ->
-        val wv = BrowserController.ensureWebView(c)
-        (wv.parent as? android.view.ViewGroup)?.removeView(wv) // 脫離上次的 parent 再掛載
-        wv
-    })
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(modifier = Modifier.fillMaxSize().background(CyberBackground), factory = { c ->
+            val wv = BrowserController.ensureWebView(c)
+            (wv.parent as? android.view.ViewGroup)?.removeView(wv) // 脫離上次的 parent 再掛載
+            wv
+        })
+        // 重新載入鈕（頁面空白/地圖沒渲染時用）。reload 內有 sleep，丟到背景執行緒避免卡 UI。
+        FloatingActionButton(
+            onClick = { Thread { try { BrowserController.reload() } catch (_: Throwable) {} }.start() },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+            containerColor = CyberSurface
+        ) { Icon(Icons.Default.Refresh, contentDescription = "重新載入", tint = CyberCyan) }
+    }
 }
 
 /** 配對碼：base64 或 JSON of {pai, token, name?}。回 true=解析成功並已寫入 prefs。 */
