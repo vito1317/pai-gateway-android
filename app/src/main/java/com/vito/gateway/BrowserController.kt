@@ -87,7 +87,7 @@ object BrowserController {
         return result
     }
 
-    private fun evalJs(js: String, timeoutSec: Long = 35): String {
+    private fun evalJs(js: String, timeoutSec: Long = 12): String {
         val r = onMain<String>(timeoutSec) { wv, done ->
             wv.evaluateJavascript(js) { value -> done(value ?: "null") }
         }
@@ -122,7 +122,8 @@ object BrowserController {
     fun snapshot(): String {
         var json = "{}"
         for (attempt in 0 until 4) {
-            json = evalJs(JS_SNAPSHOT)
+            // 短逾時：頁面載入時主執行緒被佔住會讓 callback 遲遲不回，與其卡滿不如快速放掉重試
+            json = evalJs(JS_SNAPSHOT, 6)
             val n = try { JSONObject(json).getJSONArray("elements").length() } catch (e: Throwable) { 0 }
             if (n >= 5 || attempt == 3) break
             Thread.sleep(1500)
@@ -168,7 +169,8 @@ object BrowserController {
     }
 
     fun readText(): String {
-        val t = evalJs("(function(){var t=document.body?document.body.innerText:'';return (t||'').replace(/\\s+/g,' ').trim().slice(0,6000);})()")
+        // 讀整頁文字值得多等一點（頁面可能還在載入），但仍要遠低於 server 端 90s 上限
+        val t = evalJs("(function(){var t=document.body?document.body.innerText:'';return (t||'').replace(/\\s+/g,' ').trim().slice(0,6000);})()", 30)
         return "頁面：${currentUrl()}\n\n$t"
     }
 }
