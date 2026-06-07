@@ -274,6 +274,23 @@ fun GatewayTab() {
                             ManualField("PAI 網址", paiBase) { paiBase = it; prefs.paiBase = it }
                             ManualField("註冊 Token", token) { token = it; prefs.registerToken = it }
                             ManualField("節點名稱", node) { node = it; prefs.nodeName = it }
+                            Spacer(Modifier.height(12.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = { pairWithStart(ctx, prefs) },
+                                    enabled = !GatewayState.running.value,
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = Color.Black),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) { Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(4.dp)); Text("配對並啟動") }
+                                OutlinedButton(
+                                    onClick = { GatewayService.stop(ctx) },
+                                    enabled = GatewayState.running.value,
+                                    modifier = Modifier.weight(1f),
+                                    border = BorderStroke(1.dp, CyberGray),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) { Text("停止", color = CyberGray) }
+                            }
                         }
                     }
                 }
