@@ -78,7 +78,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestRuntimePerms()
+        handleNotice(intent)
         setContent { CyberTheme { RootScreen() } }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotice(intent)
+    }
+
+    private fun handleNotice(intent: android.content.Intent?) {
+        intent?.getStringExtra("notice_text")?.let { if (it.isNotEmpty()) GatewayState.noticeText.value = it }
     }
 
     private fun requestRuntimePerms() {
@@ -138,6 +149,21 @@ fun RootScreen() {
                 NavItem.Browser -> BrowserTab()
             }
         }
+    }
+
+    // 點通知開啟 App → 彈出完整內容（markdown 渲染、可滑）
+    if (GatewayState.noticeText.value.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { GatewayState.noticeText.value = "" },
+            confirmButton = { TextButton(onClick = { GatewayState.noticeText.value = "" }) { Text("關閉", color = CyberCyan) } },
+            title = { Text("📋 PAI 通知", color = CyberCyan) },
+            text = {
+                Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
+                    Text(renderMarkdown(GatewayState.noticeText.value), color = Color.White, fontSize = 14.sp)
+                }
+            },
+            containerColor = CyberSurface
+        )
     }
 }
 

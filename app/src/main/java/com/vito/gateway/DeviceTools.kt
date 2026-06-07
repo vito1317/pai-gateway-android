@@ -3,6 +3,7 @@ package com.vito.gateway
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -47,10 +48,19 @@ object DeviceTools {
             val ch = "pai-msg"
             if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(ch) == null)
                 nm.createNotificationChannel(NotificationChannel(ch, "PAI 訊息", NotificationManager.IMPORTANCE_HIGH))
+            // 點通知 → 開 App 顯示完整內容（任務結果可能很長，通知列看不完整）
+            val intent = Intent(ctx, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("notice_title", title); putExtra("notice_text", text)
+            }
+            val flag = PendingIntent.FLAG_UPDATE_CURRENT or
+                (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+            val pi = PendingIntent.getActivity(ctx, text.hashCode(), intent, flag)
             val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, ch) else @Suppress("DEPRECATION") Notification.Builder(ctx)
             nm.notify((System.currentTimeMillis() % 100000).toInt(),
-                b.setContentTitle(title.ifEmpty { "PAI" }).setContentText(text)
+                b.setContentTitle(title.ifEmpty { "PAI" }).setContentText(text.lineSequence().firstOrNull() ?: text)
                     .setSmallIcon(android.R.drawable.ic_dialog_info).setAutoCancel(true)
+                    .setContentIntent(pi)
                     .setStyle(Notification.BigTextStyle().bigText(text)).build())
             "已發送通知到手機"
         } catch (e: Throwable) { "通知失敗：${e.message}" }

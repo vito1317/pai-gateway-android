@@ -10,6 +10,7 @@ object GatewayState {
     var publicUrl = mutableStateOf("")
     var regStatus = mutableStateOf("尚未註冊")
     val requestTab = mutableStateOf("")   // 工具呼叫請求切換的分頁（如 "browser"）；UI 處理後清空
+    val noticeText = mutableStateOf("")   // 點通知開啟 App 時要顯示的完整內容
     val logs = mutableStateListOf<String>()
 
     fun log(s: String) {
