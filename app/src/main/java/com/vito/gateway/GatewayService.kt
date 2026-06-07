@@ -23,53 +23,41 @@ class GatewayService : Service() {
 
     private fun startGateway() {
         val prefs = Prefs(this)
-        try {
-            server = GatewayServer(this, prefs.port, prefs.secret).also { it.start() }
-        } catch (e: Throwable) {
-            GatewayState.log("server 啟動失敗：${e.message}")
-            return
-        }
-        val ip = Net.localIp(this)
-        GatewayState.localUrl.value = "http://$ip:${prefs.port}/mcp"
+        acquireWakeLock()
+        // 本機 server（LAN 直連備用，反向模式下非必要但無害）
+        try { server = GatewayServer(this, prefs.port, prefs.secret).also { it.start() } } catch (e: Throwable) {}
+        GatewayState.localUrl.value = "reverse://${prefs.nodeName}"
         GatewayState.running.value = true
-        GatewayState.log("MCP server 已啟動 :${prefs.port}")
-        updateNotification("運行中 :${prefs.port}")
+        updateNotification("反向連線中")
 
-        if (prefs.useCloudflared && Cloudflared.available(this)) {
-            GatewayState.log("啟動 cloudflared 通道…")
-            Cloudflared.start(this, prefs.port,
-                onUrl = { url ->
-                    if (url != GatewayState.publicUrl.value) {
-                        GatewayState.publicUrl.value = url
-                        prefs.lastPublicUrl = url
-                        GatewayState.log("公網網址：$url")
-                        registerAsync(prefs, "$url/mcp")
-                    }
-                },
-                onLog = { GatewayState.log(it) })
-        } else {
-            // 沒有 cloudflared → 用區域網址註冊（PAI 與手機同網段時可連）
-            if (prefs.useCloudflared) GatewayState.log("未放入 cloudflared binary，改用區域網址")
-            registerAsync(prefs, GatewayState.localUrl.value)
-        }
-    }
-
-    fun registerAsync(prefs: Prefs, mcpUrl: String) {
+        // 反向連線（主要）：註冊為 reverse 節點 + 啟動 long-poll 迴圈
         if (prefs.registerToken.isBlank()) {
-            GatewayState.regStatus.value = "缺註冊 token（請在 UI 填入）"
+            GatewayState.regStatus.value = "缺註冊 token（請先配對）"
             return
         }
         Thread {
-            val r = Registrar.register(prefs.paiBase, prefs.registerToken, prefs.nodeName, mcpUrl, prefs.secret)
+            val r = ReversePoller.register(prefs.paiBase, prefs.registerToken, prefs.nodeName)
             GatewayState.regStatus.value = r
             GatewayState.log(r)
+            if (r.startsWith("✅")) {
+                ReversePoller.start(this, prefs.paiBase, prefs.registerToken, prefs.nodeName)
+            }
         }.start()
+    }
+
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private fun acquireWakeLock() {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            wakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "gateway:poll").apply { acquire() }
+        } catch (e: Throwable) {}
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        ReversePoller.stop()
         try { server?.stop() } catch (e: Throwable) {}
-        Cloudflared.stop()
+        try { wakeLock?.release() } catch (e: Throwable) {}
         GatewayState.running.value = false
         GatewayState.log("已停止")
     }
