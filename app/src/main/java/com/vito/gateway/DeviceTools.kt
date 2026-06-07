@@ -233,6 +233,27 @@ object DeviceTools {
         } catch (e: Throwable) { "開啟失敗：${e.message}" }
     }
 
+    /** 在原生日曆 App 建立事件（ACTION_INSERT 預填，使用者確認後儲存）。
+     *  beginMillis/endMillis = epoch 毫秒；endMillis 留 0 = 開始後 1 小時。 */
+    fun addCalendarEvent(ctx: Context, title: String, beginMillis: Long, endMillis: Long, location: String): String {
+        if (title.isBlank()) return "請提供事件標題"
+        if (beginMillis <= 0) return "請提供事件時間"
+        val end = if (endMillis > beginMillis) endMillis else beginMillis + 3600_000L
+        return try {
+            val intent = Intent(Intent.ACTION_INSERT).apply {
+                data = android.provider.CalendarContract.Events.CONTENT_URI
+                putExtra(android.provider.CalendarContract.Events.TITLE, title)
+                if (location.isNotBlank()) putExtra(android.provider.CalendarContract.Events.EVENT_LOCATION, location)
+                putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, beginMillis)
+                putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, end)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ui { ctx.startActivity(intent) }
+            val t = java.text.SimpleDateFormat("M/d HH:mm", java.util.Locale.TAIWAN).format(java.util.Date(beginMillis))
+            "已開啟日曆預填事件「$title」（$t），請按儲存"
+        } catch (e: Throwable) { "建立行事曆事件失敗：${e.message}" }
+    }
+
     /** 撥打電話：to 可以是號碼或聯絡人名稱（自動查通訊錄）。
      *  有 CALL_PHONE 權限 → 直接撥出；沒有 → 開撥號畫面帶好號碼（按一下撥出）。 */
     fun phoneCall(ctx: Context, to: String): String {
