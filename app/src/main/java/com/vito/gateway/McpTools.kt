@@ -155,10 +155,17 @@ object McpTools {
         }
     }
 
-    /** 輔助使用未開啟 → 帶使用者去設定頁。 */
+    /** 輔助使用服務未連接 → 區分「沒開」與「開了但服務沒連上（常見於小米/HyperOS 把它殺掉）」。 */
     private fun accNeed(ctx: Context): String {
-        PhoneAccessibilityService.openSettings(ctx)
-        return "尚未開啟「協助工具（輔助使用）」權限——已開啟設定頁，請啟用「PAI Gateway 螢幕操作」後再試"
+        return if (PhoneAccessibilityService.isEnabled(ctx)) {
+            // 設定裡是開的，但服務沒連上來（被系統殺掉/尚未啟動）
+            "「協助工具」在設定裡是開啟的，但服務沒有在執行（常見於小米/HyperOS 等把它背景關閉）。" +
+                "請：①到「設定→協助工具」把『PAI Gateway 螢幕操作』關掉再重新開啟一次；" +
+                "②到 App 設定給『自動啟動』權限、電池設為『不限制』，避免被系統殺掉。"
+        } else {
+            PhoneAccessibilityService.openSettings(ctx)
+            "尚未開啟「協助工具（輔助使用）」權限——已開啟設定頁，請啟用「PAI Gateway 螢幕操作」後再試"
+        }
     }
 
     private fun openUrl(ctx: Context, url: String): String {

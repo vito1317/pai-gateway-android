@@ -35,6 +35,14 @@ class Prefs(ctx: Context) {
         get() = sp.getString("lastPublicUrl", "") ?: ""
         set(v) = sp.edit().putString("lastPublicUrl", v).apply()
 
+    /** 語音對話的穩定 session id：持久化 → 關 App 再開也接續同一段對話（長期記憶）。 */
+    var voiceSession: String
+        get() = sp.getString("voiceSession", null) ?: ("android-" + randomToken()).also { voiceSession = it }
+        set(v) = sp.edit().putString("voiceSession", v).apply()
+
+    /** 開新對話：換一個 session id（清空雲端對話脈絡）。 */
+    fun resetVoiceSession() { voiceSession = "android-" + randomToken() }
+
     private fun randomToken(): String {
         val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         return (1..24).map { chars.random() }.joinToString("")

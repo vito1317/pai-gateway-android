@@ -58,7 +58,7 @@ object VoiceEngine {
         transcript.value = ""; userText.value = ""; steps.value = ""
         appCtx = ctx.applicationContext
         wakeMode = wake
-        session = "android-" + System.currentTimeMillis()
+        session = Prefs(ctx).voiceSession   // 持久化 session → 關 App 再開接續同一段對話
         // 抓定位給 geo（附近搜尋/天氣用）：先用 lastKnown，沒有就主動要一次新定位再補送
         geo = DeviceTools.latLng(appCtx!!)
         if (geo == null) DeviceTools.requestFreshLocation(appCtx!!) { la, lo -> geo = la to lo; sendPromptUpdate() }
