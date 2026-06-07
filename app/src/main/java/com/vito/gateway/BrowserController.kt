@@ -44,7 +44,10 @@ object BrowserController {
                 w.settings.loadWithOverviewMode = true
                 w.settings.useWideViewPort = true
                 w.settings.mediaPlaybackRequiresUserGesture = false
-                w.settings.userAgentString = w.settings.userAgentString.replace("; wv", "").plus(" PAIGateway")
+                // 用乾淨的桌面 Chrome UA（去掉 "; wv" WebView 標記、不加自訂 token），
+                // 降低被 Google 等網站當機器人攔截（Sorry/驗證頁）的機率。
+                w.settings.userAgentString =
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
                 w.webChromeClient = android.webkit.WebChromeClient()
                 w.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -84,7 +87,7 @@ object BrowserController {
         return result
     }
 
-    private fun evalJs(js: String, timeoutSec: Long = 20): String {
+    private fun evalJs(js: String, timeoutSec: Long = 35): String {
         val r = onMain<String>(timeoutSec) { wv, done ->
             wv.evaluateJavascript(js) { value -> done(value ?: "null") }
         }
