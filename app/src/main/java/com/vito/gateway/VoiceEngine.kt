@@ -160,10 +160,11 @@ object VoiceEngine {
                 var sum = 0.0
                 for (i in 0 until n) { val f = buf[i] / 32768.0; sum += f * f }
                 val rms = sqrt(sum / n).toFloat()
-                volume.value = rms
                 // 播放預計時間已過（最後一段音訊播完）→ 關閉「回應中」，回到聆聽
                 if (speaking.value && System.currentTimeMillis() > micMuteUntil) speaking.value = false
-                if (muted.value) continue
+                // 靜音：能量歸零（停止動畫，不要看起來還在抓聲音）+ 不送音訊
+                if (muted.value) { volume.value = 0f; continue }
+                volume.value = rms
                 // AI 播放期間：只送明顯人聲（打斷），其餘丟棄防回授
                 if (System.currentTimeMillis() < micMuteUntil && (!bargeIn || rms < BARGE_RMS)) continue
                 // PCM16 → JSON int array（與 web 協定一致）
