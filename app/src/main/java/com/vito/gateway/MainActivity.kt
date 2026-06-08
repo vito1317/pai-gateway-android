@@ -613,6 +613,7 @@ fun VoiceTab() {
     val orbColor = when {
         speaking -> CyberPurple        // AI 回應中（紫）
         userSpeaking -> Color(0xFF22D3EE) // 使用者說話中（亮青）
+        VoiceEngine.standby.value -> Color(0xFF475569) // 待機中（暗灰藍）
         active -> CyberCyan            // 聆聽中
         else -> CyberGray              // 停止
     }

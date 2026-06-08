@@ -29,6 +29,7 @@ object VoiceEngine {
     val transcript = mutableStateOf("")   // AI 回覆字幕
     val userText = mutableStateOf("")      // 使用者逐字稿
     val steps = mutableStateOf("")         // 執行步驟
+    val standby = mutableStateOf(false)    // 待機中（喚醒模式下睡著）→ 球變暗
 
     private var socket: Socket? = null
     private var recorder: AudioRecord? = null
@@ -55,7 +56,7 @@ object VoiceEngine {
         if (active.value) return
         active.value = true
         status.value = "連線中…"
-        transcript.value = ""; userText.value = ""; steps.value = ""
+        transcript.value = ""; userText.value = ""; steps.value = ""; standby.value = false
         appCtx = ctx.applicationContext
         wakeMode = wake
         session = Prefs(ctx).voiceSession   // 持久化 session → 關 App 再開接續同一段對話
@@ -95,13 +96,23 @@ object VoiceEngine {
                 }
             }
             s.on("stop_tts") { stopPlayback() }
-            s.on("ai_text") { args -> transcript.value = args.getOrNull(0)?.toString() ?: "" }
+            s.on("ai_text") { args ->
+                val t = args.getOrNull(0)?.toString() ?: ""
+                transcript.value = t
+                // 待機提示 → 進待機；其他正常回覆 → 解除待機
+                standby.value = t.contains("待機") || t.contains("💤")
+            }
             s.on("user_transcript") { args ->
-                // 新的一輪使用者輸入 → 清空上一輪的處理序列
+                // 新的一輪使用者輸入 → 清空上一輪的處理序列、解除待機
                 userText.value = args.getOrNull(0)?.toString() ?: ""
                 steps.value = ""
+                standby.value = false
             }
-            s.on("agent_step") { args -> appendStep(args.getOrNull(0)?.toString() ?: "") }
+            s.on("agent_step") { args ->
+                val t = args.getOrNull(0)?.toString() ?: ""
+                if (t.contains("待機")) standby.value = true
+                appendStep(t)
+            }
             s.connect()
         } catch (e: Throwable) {
             status.value = "錯誤：${e.message}"; active.value = false
