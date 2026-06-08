@@ -83,7 +83,11 @@ class PhoneAccessibilityService : AccessibilityService() {
             } catch (_: Throwable) {}
         }
         walk(root)
-        val els = out.take(80)
+        // 不再截斷元素數量：輸入框/送出鈕通常在 tree 結尾（畫面底部），
+        // 之前 take(80) 會把它們砍掉 → AI「看不到輸入框」。保留全部，靠下方字數上限把關。
+        // 另把「輸入框」優先排到最前面，確保即使字數爆掉也一定看得到（穩定操作 LINE 等 App 的關鍵）。
+        val els = (out.filter { it.editable } + out.filterNot { it.editable })
+            .mapIndexed { i, e -> e.copy(ref = "s${i + 1}") }
         lastEls = els
         val pkg = root.packageName?.toString() ?: "?"
         val sb = StringBuilder("目前 App：$pkg\n可互動元素（共 ${els.size}）：\n")
@@ -93,7 +97,7 @@ class PhoneAccessibilityService : AccessibilityService() {
             if (e.text.isNotBlank()) sb.append(" \"${e.text}\"")
             sb.append("\n")
         }
-        return sb.toString().take(5000)
+        return sb.toString().take(12000)
     }
 
     private fun find(target: String): El? {
