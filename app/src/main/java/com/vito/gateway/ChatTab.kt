@@ -54,11 +54,11 @@ private fun ChatListView() {
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(16.dp, 14.dp),
-            verticalAlignment = Alignment.CenterVertical,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text("訊息", color = CyberCyan, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Row(verticalAlignment = Alignment.CenterVertical) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { ChatStore.refreshList(ctx) }) {
                     Icon(Icons.Default.Refresh, "重新整理", tint = CyberGray)
                 }
@@ -81,7 +81,7 @@ private fun ChatListView() {
                         .clip(RoundedCornerShape(14.dp)).background(CyberSurface)
                         .clickable { ChatStore.openConv(ctx, c.id) }
                         .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertical
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(Modifier.size(40.dp).clip(CircleShape).background(CyberPurple), Alignment.Center) {
                         Icon(Icons.Default.SmartToy, null, tint = Color.White, modifier = Modifier.size(22.dp))
@@ -123,7 +123,7 @@ private fun ChatDetailView() {
         // 頂部列：返回 + 標題 + 終止
         Row(
             Modifier.fillMaxWidth().background(CyberSurface).padding(8.dp, 10.dp),
-            verticalAlignment = Alignment.CenterVertical
+            verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { ChatStore.back(ctx) }) { Icon(Icons.Default.ArrowBack, "返回", tint = CyberCyan) }
             Text(
@@ -144,7 +144,7 @@ private fun ChatDetailView() {
                 item {
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                         Box(Modifier.clip(RoundedCornerShape(14.dp)).background(CyberSurface).padding(12.dp, 10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertical) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 CircularProgressIndicator(Modifier.size(14.dp), color = CyberCyan, strokeWidth = 2.dp)
                                 Spacer(Modifier.width(8.dp)); Text("思考中…", color = CyberGray, fontSize = 13.sp)
                             }
@@ -156,7 +156,7 @@ private fun ChatDetailView() {
 
         // 待送圖片預覽
         pendingImage?.let { bmp ->
-            Row(Modifier.fillMaxWidth().padding(12.dp, 4.dp), verticalAlignment = Alignment.CenterVertical) {
+            Row(Modifier.fillMaxWidth().padding(12.dp, 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Image(bmp.asImageBitmap(), null, Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
                 Spacer(Modifier.width(8.dp))
                 Text("圖片已附上", color = CyberGray, fontSize = 12.sp, modifier = Modifier.weight(1f))
@@ -167,7 +167,7 @@ private fun ChatDetailView() {
         // 輸入列
         Row(
             Modifier.fillMaxWidth().background(CyberSurface).padding(8.dp),
-            verticalAlignment = Alignment.CenterVertical
+            verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { picker.launch("image/*") }, enabled = !ChatStore.sending.value) {
                 Icon(Icons.Default.Image, "附圖", tint = CyberCyan)

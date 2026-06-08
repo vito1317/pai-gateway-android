@@ -18,7 +18,7 @@ data class ChatMsg(val id: Long, val role: String, val content: String, val imag
 data class ConvSummary(val id: Long, val title: String, val preview: String, val role: String?)
 
 /**
- * 與 PAI 訊息對話 API（/api/chat/*）溝通的狀態中心。
+ * 與 PAI 訊息對話 API（/api/chat 系列）溝通的狀態中心。
  * 與 web 主控台共用同一批對話。認證用 X-Register-Secret（同 VisionClient）。
  */
 object ChatStore {
