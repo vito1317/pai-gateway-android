@@ -121,6 +121,7 @@ class MainActivity : ComponentActivity() {
 
 enum class NavItem(val label: String, val icon: ImageVector) {
     Node("節點", Icons.Default.Dns),
+    Chat("訊息", Icons.Default.Chat),
     Voice("語音", Icons.Default.Mic),
     Browser("瀏覽器", Icons.Default.Language)
 }
@@ -135,6 +136,7 @@ fun RootScreen() {
             "browser" -> selectedItem = NavItem.Browser
             "voice" -> selectedItem = NavItem.Voice
             "node" -> selectedItem = NavItem.Node
+            "chat" -> selectedItem = NavItem.Chat
         }
         if (GatewayState.requestTab.value.isNotEmpty()) GatewayState.requestTab.value = ""
     }
@@ -168,6 +170,7 @@ fun RootScreen() {
             // 其他分頁畫在上層（不透明背景會蓋住底層透明的瀏覽器）
             when (selectedItem) {
                 NavItem.Node -> Box(Modifier.fillMaxSize().zIndex(2f).background(CyberBackground)) { GatewayTab() }
+                NavItem.Chat -> Box(Modifier.fillMaxSize().zIndex(2f).background(CyberBackground)) { ChatTab() }
                 NavItem.Voice -> Box(Modifier.fillMaxSize().zIndex(2f).background(CyberBackground)) { VoiceTab() }
                 NavItem.Browser -> {}
             }
