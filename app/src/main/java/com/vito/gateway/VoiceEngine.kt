@@ -71,7 +71,7 @@ object VoiceEngine {
                         "camera" -> CameraCapture.grabB64()
                         else -> null
                     }
-                    if (img != null) { VisionClient.attachB64Sync(app, img, 8); warned = false }
+                    if (img != null) { VisionClient.attachB64Sync(app, img, 20); warned = false }
                     else if (!warned) { warned = true; GatewayState.log("即時畫面：尚未取得畫面（準備中…）") }
                 } catch (_: Throwable) {}
                 try { Thread.sleep(2000) } catch (_: Throwable) {}

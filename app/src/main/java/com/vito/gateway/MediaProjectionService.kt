@@ -28,6 +28,7 @@ class MediaProjectionService : Service() {
     private var reader: ImageReader? = null
     private var capW = 0
     private var capH = 0
+    @Volatile private var lastB64: String? = null   // 最後一張成功的幀（靜止畫面 keep-alive 用）
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -70,10 +71,14 @@ class MediaProjectionService : Service() {
         GatewayState.log("🖥 螢幕投影已開始（${capW}x${capH}）")
     }
 
-    /** 抓最新一張畫面 → data URI（給 VoiceEngine 投影迴圈呼叫；可能回 null）。 */
+    /**
+     * 抓最新一張畫面 → data URI（給 VoiceEngine 投影迴圈呼叫）。
+     * VirtualDisplay 只在畫面「變動」時產生新幀；靜止畫面 acquireLatestImage 會回 null，
+     * 此時回傳上一張成功的幀（keep-alive），避免 vision:pending 過期讓 AI 說「看不到畫面」。
+     */
     fun grabB64(): String? {
-        val r = reader ?: return null
-        val image = try { r.acquireLatestImage() } catch (e: Throwable) { null } ?: return null
+        val r = reader ?: return lastB64
+        val image = try { r.acquireLatestImage() } catch (e: Throwable) { null } ?: return lastB64
         return try {
             val plane = image.planes[0]
             val buffer = plane.buffer
@@ -86,9 +91,11 @@ class MediaProjectionService : Service() {
             val bmp = if (bmpW > capW) Bitmap.createBitmap(full, 0, 0, capW, capH) else full
             val bos = ByteArrayOutputStream()
             bmp.compress(Bitmap.CompressFormat.JPEG, 70, bos)
-            "data:image/jpeg;base64," + android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)
+            val uri = "data:image/jpeg;base64," + android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)
+            lastB64 = uri
+            uri
         } catch (e: Throwable) {
-            null
+            lastB64
         } finally {
             try { image.close() } catch (_: Throwable) {}
         }
