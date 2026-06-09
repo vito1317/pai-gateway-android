@@ -18,6 +18,28 @@ object VisionClient {
         return "data:image/jpeg;base64," + android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)
     }
 
+    /**
+     * 即時投影用：把一張畫面（已是 data URI）attach 到語音 session，帶短 TTL（停止推送後自動過期）。
+     * 同步執行（給擷取迴圈的背景執行緒呼叫）；失敗回 false。
+     */
+    fun attachB64Sync(ctx: android.content.Context, dataUri: String, ttlSec: Int): Boolean {
+        if (dataUri.isBlank()) return false
+        return try {
+            val prefs = Prefs(ctx)
+            val body = JSONObject().apply {
+                put("image", dataUri); put("session", prefs.voiceSession); put("ttl", ttlSec)
+            }.toString()
+            val c = (URL("${prefs.paiBase.trimEnd('/')}/api/vision/attach").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"; doOutput = true
+                connectTimeout = 8000; readTimeout = 15000
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("X-Register-Secret", prefs.registerToken)
+            }
+            c.outputStream.use { it.write(body.toByteArray()) }
+            c.responseCode in 200..299
+        } catch (e: Throwable) { false }
+    }
+
     /** 把照片掛進「語音對話」session → 之後用語音追問都會帶這張圖。 */
     fun attachToVoice(ctx: android.content.Context, bitmap: Bitmap) {
         val prefs = Prefs(ctx)

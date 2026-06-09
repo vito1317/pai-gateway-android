@@ -30,6 +30,33 @@ object VoiceEngine {
     val userText = mutableStateOf("")      // 使用者逐字稿
     val steps = mutableStateOf("")         // 執行步驟
     val standby = mutableStateOf(false)    // 待機中（喚醒模式下睡著）→ 球變暗
+    val liveVision = mutableStateOf("off") // off / screen —— 即時把畫面給 AI 看（說話時用當前畫面回覆）
+    @Volatile private var liveVisionRunning = false
+
+    /** 切換即時畫面投影（screen=每~2秒截一張螢幕 attach 到語音 session，短TTL；off=停止）。 */
+    fun setLiveVision(ctx: android.content.Context, mode: String) {
+        if (mode != "screen") {
+            liveVision.value = "off"; liveVisionRunning = false; return
+        }
+        liveVision.value = "screen"
+        if (liveVisionRunning) return
+        liveVisionRunning = true
+        val app = ctx.applicationContext
+        thread(name = "live-vision") {
+            while (liveVisionRunning && active.value) {
+                try {
+                    val shot = PhoneAccessibilityService.instance?.screenshotB64()
+                    if (shot != null && shot.startsWith("[[IMG]]")) {
+                        VisionClient.attachB64Sync(app, shot.removePrefix("[[IMG]]"), 8)
+                    } else {
+                        GatewayState.log("即時畫面：截圖失敗（協助工具沒在跑？）")
+                    }
+                } catch (_: Throwable) {}
+                try { Thread.sleep(2000) } catch (_: Throwable) {}
+            }
+            liveVisionRunning = false
+        }
+    }
 
     private var socket: Socket? = null
     private var recorder: AudioRecord? = null
@@ -144,6 +171,7 @@ object VoiceEngine {
 
     fun stop() {
         active.value = false; recording = false; speaking.value = false; status.value = ""
+        liveVisionRunning = false; liveVision.value = "off"
         try { socket?.emit("recording-stopped") } catch (e: Throwable) {}
         try { socket?.disconnect() } catch (e: Throwable) {}
         socket = null

@@ -634,6 +634,13 @@ fun VoiceTab() {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("語音對話", color = CyberCyan, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // 即時畫面：開了之後 AI 邊聽邊看螢幕（說話時用當前畫面回覆）
+                if (active) {
+                    val live = VoiceEngine.liveVision.value == "screen"
+                    TextButton(onClick = { VoiceEngine.setLiveVision(ctx, if (live) "off" else "screen") }) {
+                        Text(if (live) "🖥 投影中" else "🖥 投影", color = if (live) Color(0xFF34D399) else CyberGray, fontSize = 12.sp)
+                    }
+                }
                 Text("喚醒", color = CyberGray, fontSize = 12.sp)
                 Switch(checked = wake, onCheckedChange = { wake = it }, enabled = !active)
             }
