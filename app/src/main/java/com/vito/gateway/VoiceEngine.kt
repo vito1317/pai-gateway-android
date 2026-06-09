@@ -45,8 +45,14 @@ object VoiceEngine {
             liveVision.value = "off"; liveVisionRunning = false
             try { MediaProjectionService.stop(app) } catch (_: Throwable) {}
             try { CameraCapture.stop() } catch (_: Throwable) {}
+            try { VisionOverlay.hide() } catch (_: Throwable) {}
             return
         }
+        // 投影中 App 多半在背景 → 用懸浮視窗顯示 AI 回應
+        try {
+            if (!VisionOverlay.canDraw(app)) VisionOverlay.requestPermission(app)
+            else { VisionOverlay.show(app); VisionOverlay.update(app, transcript.value, userText.value) }
+        } catch (_: Throwable) {}
         if (mode == "camera") {
             try { CameraCapture.start(app) } catch (_: Throwable) {}
             try { MediaProjectionService.stop(app) } catch (_: Throwable) {}   // 與螢幕投影互斥
@@ -144,12 +150,14 @@ object VoiceEngine {
                 transcript.value = t
                 // 待機提示 → 進待機；其他正常回覆 → 解除待機
                 standby.value = t.contains("待機") || t.contains("💤")
+                if (liveVision.value != "off") appCtx?.let { VisionOverlay.update(it, t, userText.value) }
             }
             s.on("user_transcript") { args ->
                 // 新的一輪使用者輸入 → 清空上一輪的處理序列、解除待機
                 userText.value = args.getOrNull(0)?.toString() ?: ""
                 steps.value = ""
                 standby.value = false
+                if (liveVision.value != "off") appCtx?.let { VisionOverlay.update(it, transcript.value, userText.value) }
             }
             s.on("agent_step") { args ->
                 val t = args.getOrNull(0)?.toString() ?: ""
@@ -190,6 +198,7 @@ object VoiceEngine {
         liveVisionRunning = false; liveVision.value = "off"
         try { appCtx?.let { MediaProjectionService.stop(it) } } catch (_: Throwable) {}
         try { CameraCapture.stop() } catch (_: Throwable) {}
+        try { VisionOverlay.hide() } catch (_: Throwable) {}
         try { socket?.emit("recording-stopped") } catch (e: Throwable) {}
         try { socket?.disconnect() } catch (e: Throwable) {}
         socket = null
