@@ -110,6 +110,10 @@ object ChatStore {
     fun send(ctx: Context, text: String, image: Bitmap?) {
         if (sending.value) return
         if (text.isBlank() && image == null) return
+        // 斜線指令：/new 開新對話、/clear 清空目前對話
+        val slash = text.trim().trimStart('/').lowercase()
+        if (image == null && (slash == "new" || slash == "start")) { newConv(); return }
+        if (image == null && (slash == "clear" || slash == "reset")) { clearCurrent(ctx); return }
         sending.value = true
         val dataUri = image?.let { encodeImage(it) }
         // 樂觀顯示使用者訊息
@@ -130,6 +134,17 @@ object ChatStore {
             } catch (e: Throwable) {
                 messages.add(ChatMsg(-3, "assistant", "送出失敗：${e.message}", null))
             } finally { sending.value = false }
+        }
+    }
+
+    /** 清空目前對話的所有訊息（/clear）。 */
+    private fun clearCurrent(ctx: Context) {
+        val id = currentConvId.value?.takeIf { it > 0 }
+        messages.clear()
+        title.value = "新對話"
+        if (id == null) return
+        thread {
+            try { post(ctx, "/api/chat/send", JSONObject().put("conversation_id", id).put("message", "/clear"), 20000) } catch (_: Throwable) {}
         }
     }
 

@@ -53,6 +53,13 @@ object McpTools {
             JSONObject().put("title", s("事件標題")).put("begin_ms", JSONObject().put("type", "integer").put("description", "開始時間 epoch 毫秒"))
                 .put("end_ms", JSONObject().put("type", "integer").put("description", "結束 epoch 毫秒，可留0")).put("location", s("地點，可空")),
             JSONArray().put("title").put("begin_ms"))
+        tool("set_alarm", "在手機設定鬧鐘。hour=時(0-23)、minute=分(0-59)，message=鬧鐘標籤(可空)。直接設定到系統時鐘 App。",
+            JSONObject().put("hour", JSONObject().put("type", "integer").put("description", "時 0-23"))
+                .put("minute", JSONObject().put("type", "integer").put("description", "分 0-59")).put("message", s("鬧鐘標籤，可空")),
+            JSONArray().put("hour").put("minute"))
+        tool("set_timer", "在手機設定倒數計時器。seconds=總秒數（例：5分鐘=300）；message=標籤(可空)。",
+            JSONObject().put("seconds", JSONObject().put("type", "integer").put("description", "總秒數")).put("message", s("標籤，可空")),
+            JSONArray().put("seconds"))
         tool("phone_call", "用手機撥打電話。to=電話號碼或聯絡人名稱（會自動查通訊錄）。有授權直接撥出，否則開撥號畫面帶好號碼。",
             JSONObject().put("to", s("電話號碼或聯絡人名稱")), JSONArray().put("to"))
         tool("notifications_list", "讀取手機最近通知（LINE/訊息等，最多15則，標示哪些可直接回覆）。需開啟「通知存取」權限（未開會自動帶去設定頁）。", JSONObject())
@@ -113,6 +120,8 @@ object McpTools {
             "open_app" -> DeviceTools.openApp(ctx, args.optString("name"))
             "list_apps" -> DeviceTools.listApps(ctx)
             "add_calendar_event" -> DeviceTools.addCalendarEvent(ctx, args.optString("title"), args.optLong("begin_ms"), args.optLong("end_ms"), args.optString("location"))
+            "set_alarm" -> DeviceTools.setAlarm(ctx, args.optInt("hour", -1), args.optInt("minute", -1), args.optString("message"))
+            "set_timer" -> DeviceTools.setTimer(ctx, args.optInt("seconds", 0), args.optString("message"))
             "play_music" -> DeviceTools.playMusic(ctx, args.optString("query"))
             "media_control" -> DeviceTools.mediaControl(ctx, args.optString("action"))
             "phone_call" -> DeviceTools.phoneCall(ctx, args.optString("to"))
@@ -174,6 +183,8 @@ object McpTools {
         "open_app" -> "🚀 開啟：${args.optString("name")}"
         "maps_route" -> "🗺️ 開啟地圖路線"
         "add_calendar_event" -> "📅 建立行事曆事件：${args.optString("title")}"
+        "set_alarm" -> "⏰ 設定鬧鐘：%02d:%02d".format(args.optInt("hour"), args.optInt("minute"))
+        "set_timer" -> "⏲ 設定計時器：${args.optInt("seconds")}秒"
         "phone_call" -> "📞 撥打：${args.optString("to")}"
         "notification_reply" -> "💬 回覆訊息"
         "play_music" -> "🎵 播放音樂"

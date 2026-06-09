@@ -254,6 +254,38 @@ object DeviceTools {
         } catch (e: Throwable) { "建立行事曆事件失敗：${e.message}" }
     }
 
+    /** 設定鬧鐘（AlarmClock intent，SKIP_UI 直接設定到系統時鐘 App）。 */
+    fun setAlarm(ctx: Context, hour: Int, minutes: Int, message: String): String {
+        if (hour !in 0..23 || minutes !in 0..59) return "時間格式錯誤（時 0-23、分 0-59）"
+        return try {
+            val intent = Intent(android.provider.AlarmClock.ACTION_SET_ALARM).apply {
+                putExtra(android.provider.AlarmClock.EXTRA_HOUR, hour)
+                putExtra(android.provider.AlarmClock.EXTRA_MINUTES, minutes)
+                if (message.isNotBlank()) putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, message)
+                putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ui { ctx.startActivity(intent) }
+            "已設定鬧鐘 %02d:%02d%s".format(hour, minutes, if (message.isNotBlank()) "（$message）" else "")
+        } catch (e: Throwable) { "設定鬧鐘失敗：${e.message}（可能是裝置時鐘 App 不支援）" }
+    }
+
+    /** 設定倒數計時器（秒）。 */
+    fun setTimer(ctx: Context, seconds: Int, message: String): String {
+        if (seconds <= 0) return "請提供大於 0 的秒數"
+        return try {
+            val intent = Intent(android.provider.AlarmClock.ACTION_SET_TIMER).apply {
+                putExtra(android.provider.AlarmClock.EXTRA_LENGTH, seconds)
+                if (message.isNotBlank()) putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, message)
+                putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ui { ctx.startActivity(intent) }
+            val m = seconds / 60; val s = seconds % 60
+            "已設定計時器 ${if (m > 0) "$m 分" else ""}${if (s > 0) "$s 秒" else ""}${if (message.isNotBlank()) "（$message）" else ""}"
+        } catch (e: Throwable) { "設定計時器失敗：${e.message}" }
+    }
+
     /** 撥打電話：to 可以是號碼或聯絡人名稱（自動查通訊錄）。
      *  有 CALL_PHONE 權限 → 直接撥出；沒有 → 開撥號畫面帶好號碼（按一下撥出）。 */
     fun phoneCall(ctx: Context, to: String): String {
