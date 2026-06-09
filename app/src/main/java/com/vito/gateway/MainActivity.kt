@@ -346,10 +346,9 @@ fun GatewayTab() {
         val c = res.contents
         if (c.isNullOrBlank()) {
             GatewayState.log("掃描取消或未取得內容")
-        } else if (applyPairCode(c, prefs)) {
+        } else if (applyPairCode(ctx, c, prefs)) {
             paiBase = prefs.paiBase; token = prefs.registerToken
-            GatewayState.log("✅ 已配對 ${prefs.nodeName}，啟動中…")
-            pairWithStart(ctx, prefs)
+            // 服務啟動由 applyPairCode 處理（pair 版兌換完才啟動；token 版直接啟動）
         } else {
             GatewayState.log("QR 內容不是有效配對碼：" + c.take(24))
         }
@@ -451,8 +450,8 @@ fun GatewayTab() {
                         ),
                         trailingIcon = {
                             IconButton(onClick = {
-                                if (applyPairCode(pairCode, prefs)) {
-                                    paiBase = prefs.paiBase; token = prefs.registerToken; pairWithStart(ctx, prefs)
+                                if (applyPairCode(ctx, pairCode, prefs)) {
+                                    paiBase = prefs.paiBase; token = prefs.registerToken
                                 } else GatewayState.log("配對碼格式錯誤")
                             }) { Icon(Icons.Default.Link, contentDescription = null, tint = CyberCyan) }
                         }
@@ -807,18 +806,57 @@ fun BrowserTab() {
     }
 }
 
-/** 配對碼：base64 或 JSON of {pai, token, name?}。回 true=解析成功並已寫入 prefs。 */
-private fun applyPairCode(code: String, prefs: Prefs): Boolean {
+/**
+ * 配對碼：base64 或 JSON。
+ *  - 新版 {pai, pair}：一次性碼 → 背景兌換成「此帳號的長期 per-device 憑證」(綁帳號，安全)。
+ *  - 舊版 {pai, token}：直接當共用憑證寫入（向後相容）。
+ * 回 true=解析成功（pair 版會接著非同步兌換）。
+ */
+private fun applyPairCode(ctx: android.content.Context, code: String, prefs: Prefs): Boolean {
     val raw = code.trim()
     if (raw.isEmpty()) return false
     return try {
         val json = if (raw.startsWith("{")) raw else String(android.util.Base64.decode(raw, android.util.Base64.DEFAULT))
         val o = JSONObject(json)
         prefs.paiBase = o.optString("pai", prefs.paiBase)
-        prefs.registerToken = o.optString("token", prefs.registerToken)
         if (o.has("name")) prefs.nodeName = o.getString("name")
-        prefs.registerToken.isNotBlank()
+        val pair = o.optString("pair", "")
+        if (pair.isNotBlank()) {
+            exchangePair(ctx, prefs, pair)   // 一次性碼 → 換長期憑證（背景）
+            true
+        } else {
+            prefs.registerToken = o.optString("token", prefs.registerToken)
+            val ok = prefs.registerToken.isNotBlank()
+            if (ok) { GatewayState.log("✅ 已配對 ${prefs.nodeName}，啟動中…"); GatewayService.start(ctx) }
+            ok
+        }
     } catch (e: Throwable) { false }
+}
+
+/** 用一次性配對碼兌換長期 per-device 憑證，存起來並啟動節點服務。 */
+private fun exchangePair(ctx: android.content.Context, prefs: Prefs, pairToken: String) {
+    GatewayState.log("🔑 配對中…")
+    kotlin.concurrent.thread {
+        try {
+            val body = JSONObject().apply { put("pair_token", pairToken); put("name", prefs.nodeName) }.toString()
+            val c = (java.net.URL("${prefs.paiBase.trimEnd('/')}/api/gateway/pair").openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "POST"; doOutput = true
+                connectTimeout = 10000; readTimeout = 20000
+                setRequestProperty("Content-Type", "application/json")
+            }
+            c.outputStream.use { it.write(body.toByteArray()) }
+            val code = c.responseCode
+            val resp = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: ""
+            if (code in 200..299) {
+                val o = JSONObject(resp)
+                prefs.registerToken = o.optString("device_token")
+                GatewayState.log("✅ 已配對到帳號：${o.optString("account")}，啟動中…")
+                GatewayService.start(ctx)
+            } else {
+                GatewayState.log("配對失敗（$code）：配對碼可能已過期，請重新產生")
+            }
+        } catch (e: Throwable) { GatewayState.log("配對失敗：${e.message}") }
+    }
 }
 
 private fun pairWithStart(ctx: android.content.Context, prefs: Prefs) {
