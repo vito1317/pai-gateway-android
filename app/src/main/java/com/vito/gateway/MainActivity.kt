@@ -657,6 +657,13 @@ fun VoiceTab() {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("語音對話", color = CyberCyan, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // 開車模式：免手操作、念新通知、主動問目的地（需語音連線中）
+                if (active) {
+                    val drv = VoiceEngine.drivingMode.value
+                    TextButton(onClick = { VoiceEngine.setDriving(ctx, !drv) }) {
+                        Text(if (drv) "🚗 開車中" else "🚗 開車", color = if (drv) Color(0xFF34D399) else CyberGray, fontSize = 12.sp)
+                    }
+                }
                 Text("喚醒", color = CyberGray, fontSize = 12.sp)
                 Switch(checked = wake, onCheckedChange = { wake = it }, enabled = !active)
             }

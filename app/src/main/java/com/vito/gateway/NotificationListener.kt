@@ -64,8 +64,21 @@ class NotificationListener : NotificationListenerService() {
             recent.removeAll { it.key == sbn.key }
             recent.add(0, Note(sbn.key, sbn.packageName, app, title, text, canReply, System.currentTimeMillis()))
             while (recent.size > 30) recent.removeAt(recent.size - 1)
+
+            // 開車模式：可回覆的訊息類通知 → 主動念出來並問要不要回覆（免手操作）
+            if (canReply && VoiceEngine.drivingMode.value && VoiceEngine.active.value) {
+                val now = System.currentTimeMillis()
+                if (sbn.key != lastAnnouncedKey || now - lastAnnouncedAt > 4000) {
+                    lastAnnouncedKey = sbn.key; lastAnnouncedAt = now
+                    val who = title.ifEmpty { app }
+                    VoiceEngine.announceToVoice(applicationContext, "你有一則來自 $who 的訊息：$text。需要回覆嗎？")
+                }
+            }
         } catch (_: Throwable) {}
     }
+
+    private var lastAnnouncedKey: String? = null
+    private var lastAnnouncedAt: Long = 0L
 
     /** 用通知的快速回覆動作直接回訊息（LINE 等支援 RemoteInput 的通知都可）。 */
     fun reply(key: String, message: String): String {

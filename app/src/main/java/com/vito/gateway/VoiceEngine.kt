@@ -32,6 +32,7 @@ object VoiceEngine {
     val standby = mutableStateOf(false)    // 待機中（喚醒模式下睡著）→ 球變暗
     val liveVision = mutableStateOf("off") // off / screen —— 即時把畫面給 AI 看（說話時用當前畫面回覆）
     @Volatile private var liveVisionRunning = false
+    val drivingMode = mutableStateOf(false) // 開車模式：免手操作、念新通知、主動問目的地
 
     /**
      * 切換即時畫面投影。
@@ -175,12 +176,40 @@ object VoiceEngine {
         put("mode", "hybrid"); put("conversation_id", JSONObject.NULL)
         put("prompt", ""); put("session", session)
         put("wake", wakeMode); put("bargeIn", bargeIn)
+        put("driving", drivingMode.value)
         geo?.let { put("geo", JSONObject().put("lat", it.first).put("lng", it.second)) }
     }
 
     /** 拿到新定位後補送（同 session，伺服器只更新 geo）。 */
     private fun sendPromptUpdate() {
         try { if (active.value) socket?.emit("prompt_text", buildPrompt()) } catch (_: Throwable) {}
+    }
+
+    /** 開車模式切換：重送 prompt（換 persona）；開啟時主動問目的地。 */
+    fun setDriving(ctx: android.content.Context, on: Boolean) {
+        drivingMode.value = on
+        sendPromptUpdate()
+        if (on) announceToVoice(ctx, "開車模式開啟，請問要導航去哪裡？")
+    }
+
+    /** 主動讓語音念一句（開車模式問目的地、念通知用）。POST /api/voice/announce。 */
+    fun announceToVoice(ctx: android.content.Context, text: String) {
+        val app = ctx.applicationContext
+        val sess = session
+        kotlin.concurrent.thread {
+            try {
+                val prefs = Prefs(app)
+                val body = org.json.JSONObject().apply { put("session", sess); put("text", text) }.toString()
+                val c = (java.net.URL("${prefs.paiBase.trimEnd('/')}/api/voice/announce").openConnection() as java.net.HttpURLConnection).apply {
+                    requestMethod = "POST"; doOutput = true
+                    connectTimeout = 8000; readTimeout = 30000
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("X-Register-Secret", prefs.registerToken)
+                }
+                c.outputStream.use { it.write(body.toByteArray()) }
+                c.responseCode
+            } catch (_: Throwable) {}
+        }
     }
 
     /** 累積處理序列：每步一行、去掉連續重複、最多保留最近 12 步。 */
@@ -199,6 +228,7 @@ object VoiceEngine {
         try { appCtx?.let { MediaProjectionService.stop(it) } } catch (_: Throwable) {}
         try { CameraCapture.stop() } catch (_: Throwable) {}
         try { VisionOverlay.hide() } catch (_: Throwable) {}
+        drivingMode.value = false
         try { socket?.emit("recording-stopped") } catch (e: Throwable) {}
         try { socket?.disconnect() } catch (e: Throwable) {}
         socket = null
