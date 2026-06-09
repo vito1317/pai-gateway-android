@@ -634,13 +634,6 @@ fun VoiceTab() {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("語音對話", color = CyberCyan, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 即時畫面：開了之後 AI 邊聽邊看螢幕（說話時用當前畫面回覆）
-                if (active) {
-                    val live = VoiceEngine.liveVision.value == "screen"
-                    TextButton(onClick = { VoiceEngine.setLiveVision(ctx, if (live) "off" else "screen") }) {
-                        Text(if (live) "🖥 投影中" else "🖥 投影", color = if (live) Color(0xFF34D399) else CyberGray, fontSize = 12.sp)
-                    }
-                }
                 Text("喚醒", color = CyberGray, fontSize = 12.sp)
                 Switch(checked = wake, onCheckedChange = { wake = it }, enabled = !active)
             }
@@ -661,6 +654,24 @@ fun VoiceTab() {
         }
         Spacer(Modifier.height(12.dp))
         Text(phase, color = if (userSpeaking) Color(0xFF22D3EE) else CyberGray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(10.dp))
+
+        // 即時畫面投影：開了之後 AI 邊聽邊看螢幕（說話時用當前螢幕回覆）。需「協助工具」開啟。
+        run {
+            val live = VoiceEngine.liveVision.value == "screen"
+            OutlinedButton(
+                onClick = { VoiceEngine.setLiveVision(ctx, if (live) "off" else "screen") },
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (live) Color(0xFF065F46) else Color.Transparent,
+                    contentColor = if (live) Color(0xFF6EE7B7) else CyberCyan
+                ),
+                border = BorderStroke(1.dp, if (live) Color(0xFF34D399) else CyberCyan.copy(alpha = 0.5f))
+            ) {
+                Icon(Icons.Default.ScreenShare, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (live) "🖥 螢幕投影中（AI 正在看你的畫面）" else "🖥 開啟螢幕投影給 AI 看", fontSize = 13.sp)
+            }
+        }
         Spacer(Modifier.height(8.dp))
 
         // 字幕區（佔剩餘空間、可上下滑；內容更新自動捲到最新）
