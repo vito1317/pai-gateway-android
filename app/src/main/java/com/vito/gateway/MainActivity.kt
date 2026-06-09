@@ -129,6 +129,29 @@ enum class NavItem(val label: String, val icon: ImageVector) {
 @Composable
 fun RootScreen() {
     var selectedItem by remember { mutableStateOf(NavItem.Node) }
+    val rootCtx = LocalContext.current
+
+    // 螢幕投影：系統同意框（Android 14+ 可選「單一 App / 整個螢幕」）→ 啟動投影服務 + 開始拉幀
+    val projLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
+            MediaProjectionService.start(rootCtx, result.resultCode, result.data!!)
+            VoiceEngine.setLiveVision(rootCtx, "screen")
+        } else {
+            VoiceEngine.setLiveVision(rootCtx, "off")
+        }
+        GatewayState.requestProjection.value = false
+    }
+    LaunchedEffect(GatewayState.requestProjection.value) {
+        if (GatewayState.requestProjection.value) {
+            try {
+                val mgr = rootCtx.getSystemService(android.content.Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                projLauncher.launch(mgr.createScreenCaptureIntent())
+            } catch (e: Throwable) {
+                GatewayState.requestProjection.value = false
+                GatewayState.log("無法開啟螢幕投影：${e.message}")
+            }
+        }
+    }
 
     // 工具呼叫（browser_*）請求切到瀏覽器分頁時自動切換（語音仍在背景跑）
     LaunchedEffect(GatewayState.requestTab.value) {
@@ -656,11 +679,14 @@ fun VoiceTab() {
         Text(phase, color = if (userSpeaking) Color(0xFF22D3EE) else CyberGray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(10.dp))
 
-        // 即時畫面投影：開了之後 AI 邊聽邊看螢幕（說話時用當前螢幕回覆）。需「協助工具」開啟。
+        // 即時畫面投影：用系統 MediaProjection（可選單一 App / 整個螢幕）。開了之後 AI 邊聽邊看畫面。
         run {
             val live = VoiceEngine.liveVision.value == "screen"
             OutlinedButton(
-                onClick = { VoiceEngine.setLiveVision(ctx, if (live) "off" else "screen") },
+                onClick = {
+                    if (live) VoiceEngine.setLiveVision(ctx, "off")
+                    else GatewayState.requestProjection.value = true   // 跳系統同意框（可選 App/整個螢幕）
+                },
                 colors = ButtonDefaults.outlinedButtonColors(
                     containerColor = if (live) Color(0xFF065F46) else Color.Transparent,
                     contentColor = if (live) Color(0xFF6EE7B7) else CyberCyan
@@ -669,7 +695,7 @@ fun VoiceTab() {
             ) {
                 Icon(Icons.Default.ScreenShare, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(if (live) "🖥 螢幕投影中（AI 正在看你的畫面）" else "🖥 開啟螢幕投影給 AI 看", fontSize = 13.sp)
+                Text(if (live) "🖥 投影中（AI 正在看畫面）· 點此停止" else "🖥 螢幕投影給 AI 看（可選 App）", fontSize = 13.sp)
             }
         }
         Spacer(Modifier.height(8.dp))

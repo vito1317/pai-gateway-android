@@ -33,24 +33,34 @@ object VoiceEngine {
     val liveVision = mutableStateOf("off") // off / screen —— 即時把畫面給 AI 看（說話時用當前畫面回覆）
     @Volatile private var liveVisionRunning = false
 
-    /** 切換即時畫面投影（screen=每~2秒截一張螢幕 attach 到語音 session，短TTL；off=停止）。 */
+    /**
+     * 切換即時畫面投影。
+     * mode="screen" → 從 MediaProjectionService 拉畫面（使用者已在系統框選好 App/整個螢幕）；
+     * mode="camera" → 從 CameraCapture 拉鏡頭畫面；
+     * 每 ~2 秒 attach 到語音 session（短 TTL），說話時 AI 用當前畫面回覆。off=停止。
+     */
     fun setLiveVision(ctx: android.content.Context, mode: String) {
-        if (mode != "screen") {
-            liveVision.value = "off"; liveVisionRunning = false; return
-        }
-        liveVision.value = "screen"
-        if (liveVisionRunning) return
-        liveVisionRunning = true
         val app = ctx.applicationContext
+        if (mode != "screen" && mode != "camera") {
+            liveVision.value = "off"; liveVisionRunning = false
+            try { MediaProjectionService.stop(app) } catch (_: Throwable) {}
+            try { CameraCapture.stop() } catch (_: Throwable) {}
+            return
+        }
+        liveVision.value = mode
+        if (liveVisionRunning) return   // 已在跑 → 只切來源（liveVision.value 已更新）
+        liveVisionRunning = true
         thread(name = "live-vision") {
+            var warned = false
             while (liveVisionRunning && active.value) {
                 try {
-                    val shot = PhoneAccessibilityService.instance?.screenshotB64()
-                    if (shot != null && shot.startsWith("[[IMG]]")) {
-                        VisionClient.attachB64Sync(app, shot.removePrefix("[[IMG]]"), 8)
-                    } else {
-                        GatewayState.log("即時畫面：截圖失敗（協助工具沒在跑？）")
+                    val img: String? = when (liveVision.value) {
+                        "screen" -> MediaProjectionService.instance?.grabB64()
+                        "camera" -> CameraCapture.grabB64()
+                        else -> null
                     }
+                    if (img != null) { VisionClient.attachB64Sync(app, img, 8); warned = false }
+                    else if (!warned) { warned = true; GatewayState.log("即時畫面：尚未取得畫面（準備中…）") }
                 } catch (_: Throwable) {}
                 try { Thread.sleep(2000) } catch (_: Throwable) {}
             }
@@ -172,6 +182,8 @@ object VoiceEngine {
     fun stop() {
         active.value = false; recording = false; speaking.value = false; status.value = ""
         liveVisionRunning = false; liveVision.value = "off"
+        try { appCtx?.let { MediaProjectionService.stop(it) } } catch (_: Throwable) {}
+        try { CameraCapture.stop() } catch (_: Throwable) {}
         try { socket?.emit("recording-stopped") } catch (e: Throwable) {}
         try { socket?.disconnect() } catch (e: Throwable) {}
         socket = null
