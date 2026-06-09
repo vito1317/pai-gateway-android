@@ -146,7 +146,7 @@ private fun ChatDetailView() {
                         Box(Modifier.clip(RoundedCornerShape(14.dp)).background(CyberSurface).padding(12.dp, 10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 CircularProgressIndicator(Modifier.size(14.dp), color = CyberCyan, strokeWidth = 2.dp)
-                                Spacer(Modifier.width(8.dp)); Text("思考中…", color = CyberGray, fontSize = 13.sp)
+                                Spacer(Modifier.width(8.dp)); Text(ChatStore.steps.value.ifBlank { "思考中…" }, color = CyberGray, fontSize = 13.sp)
                             }
                         }
                     }

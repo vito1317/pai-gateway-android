@@ -29,6 +29,7 @@ object ChatStore {
     val loadingList = mutableStateOf(false)
     val loadingMsgs = mutableStateOf(false)
     val sending = mutableStateOf(false)
+    val steps = mutableStateOf("")        // 串流中目前的執行步驟
     val error = mutableStateOf("")
 
     private fun base(ctx: Context) = Prefs(ctx).paiBase.trimEnd('/')
@@ -114,8 +115,10 @@ object ChatStore {
         val slash = text.trim().trimStart('/').lowercase()
         if (image == null && (slash == "new" || slash == "start")) { newConv(); return }
         if (image == null && (slash == "clear" || slash == "reset")) { clearCurrent(ctx); return }
+        // 純文字 → 走 SSE 即時串流（逐字顯示）；有圖 → 非串流多模態
+        if (image == null) { sendStream(ctx, text); return }
         sending.value = true
-        val dataUri = image?.let { encodeImage(it) }
+        val dataUri = image.let { encodeImage(it) }
         // 樂觀顯示使用者訊息
         messages.add(ChatMsg(-1, "user", text.ifBlank { "（圖片）" }, dataUri))
         thread {
@@ -145,6 +148,63 @@ object ChatStore {
         if (id == null) return
         thread {
             try { post(ctx, "/api/chat/send", JSONObject().put("conversation_id", id).put("message", "/clear"), 20000) } catch (_: Throwable) {}
+        }
+    }
+
+    /** 純文字訊息走 SSE 即時串流：逐字更新 AI 氣泡、逐步顯示執行步驟。 */
+    private fun sendStream(ctx: Context, text: String) {
+        sending.value = true
+        messages.add(ChatMsg(-1, "user", text, null))
+        val aiIndex = messages.size                  // AI 氣泡會插在這個位置
+        messages.add(ChatMsg(-2, "assistant", "", null))
+        steps.value = ""
+        val app = ctx.applicationContext
+        thread {
+            val sb = StringBuilder()
+            fun setAi(s: String) {
+                val i = aiIndex
+                if (i < messages.size) messages[i] = ChatMsg(-2, "assistant", s, null)
+            }
+            try {
+                val body = JSONObject().apply {
+                    currentConvId.value?.takeIf { it > 0 }?.let { put("conversation_id", it) }
+                    put("message", text)
+                }.toString()
+                val c = (URL("${base(app)}/api/chat/stream").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"; doOutput = true
+                    connectTimeout = 10000; readTimeout = 180000
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("Accept", "text/event-stream")
+                    setRequestProperty("X-Register-Secret", token(app))
+                }
+                c.outputStream.use { it.write(body.toByteArray()) }
+                val code = c.responseCode
+                val stream = if (code in 200..299) c.inputStream else c.errorStream
+                val reader = stream?.bufferedReader()
+                var event = "message"
+                reader?.forEachLine { line ->
+                    when {
+                        line.startsWith("event:") -> event = line.substring(6).trim()
+                        line.startsWith("data:") -> {
+                            val data = line.substring(5).trim()
+                            try {
+                                val o = JSONObject(data)
+                                when (event) {
+                                    "start" -> { val cid = o.optLong("conversation_id", 0); if (cid > 0) currentConvId.value = cid }
+                                    "step" -> steps.value = o.optString("text")
+                                    "delta" -> { sb.append(o.optString("text")); setAi(sb.toString()) }
+                                    "done" -> { val rep = o.optString("reply"); if (rep.isNotEmpty()) setAi(rep); steps.value = "" }
+                                    "error" -> setAi("（出錯：${o.optString("text")}）")
+                                }
+                            } catch (_: Throwable) {}
+                        }
+                    }
+                }
+                if (sb.isEmpty() && (messages.getOrNull(aiIndex)?.content ?: "").isEmpty()) setAi("（無回應）")
+                error.value = ""
+            } catch (e: Throwable) {
+                setAi("送出失敗：${e.message}")
+            } finally { sending.value = false; steps.value = "" }
         }
     }
 
