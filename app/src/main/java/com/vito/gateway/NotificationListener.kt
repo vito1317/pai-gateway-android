@@ -66,10 +66,12 @@ class NotificationListener : NotificationListenerService() {
             while (recent.size > 30) recent.removeAt(recent.size - 1)
 
             // 開車模式：可回覆的訊息類通知 → 主動念出來並問要不要回覆（免手操作）
+            // 去重：同一則通知常重複觸發 onNotificationPosted（更新/分組）→ 用「內容指紋」15 秒內不重念
             if (canReply && VoiceEngine.drivingMode.value && VoiceEngine.active.value) {
                 val now = System.currentTimeMillis()
-                if (sbn.key != lastAnnouncedKey || now - lastAnnouncedAt > 4000) {
-                    lastAnnouncedKey = sbn.key; lastAnnouncedAt = now
+                val fp = "$app|$title|$text"
+                if (fp != lastAnnouncedFp || now - lastAnnouncedAt > 15000) {
+                    lastAnnouncedFp = fp; lastAnnouncedAt = now
                     val who = title.ifEmpty { app }
                     VoiceEngine.announceToVoice(applicationContext, "你有一則來自 $who 的訊息：$text。需要回覆嗎？")
                 }
@@ -77,7 +79,7 @@ class NotificationListener : NotificationListenerService() {
         } catch (_: Throwable) {}
     }
 
-    private var lastAnnouncedKey: String? = null
+    private var lastAnnouncedFp: String? = null
     private var lastAnnouncedAt: Long = 0L
 
     /** 用通知的快速回覆動作直接回訊息（LINE 等支援 RemoteInput 的通知都可）。 */
