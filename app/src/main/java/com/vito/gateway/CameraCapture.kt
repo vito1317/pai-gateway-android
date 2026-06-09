@@ -24,12 +24,20 @@ object CameraCapture {
     private var appCtx: Context? = null
     private val exec = Executors.newSingleThreadExecutor()
     @Volatile var lensBack = true   // true=後鏡頭，false=前鏡頭
+    @Volatile private var firstFrameLogged = false
+    @Volatile private var frameErrLogged = false
 
     /** 開啟鏡頭（在主執行緒綁定）。重複呼叫安全。 */
     fun start(ctx: Context) {
         if (provider != null) return
         val app = ctx.applicationContext
         appCtx = app
+        firstFrameLogged = false; frameErrLogged = false
+        if (androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.CAMERA)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            GatewayState.log("鏡頭啟動失敗：沒有相機權限，請到設定→App→PAI Gateway→權限開啟相機")
+            return
+        }
         ContextCompat.getMainExecutor(app).execute {
             try {
                 val o = HeadlessLifecycle().also { owner = it; it.resume() }
@@ -39,12 +47,16 @@ object CameraCapture {
                         val p = future.get(); provider = p
                         val analysis = ImageAnalysis.Builder()
                             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)  // toBitmap 對 RGBA 保證可用（YUV 會丟例外）
                             .build()
                         analysis.setAnalyzer(exec) { img ->
                             try {
                                 val bmp = img.toBitmap()
                                 latest = rotate(bmp, img.imageInfo.rotationDegrees)
-                            } catch (_: Throwable) {} finally { img.close() }
+                                if (! firstFrameLogged) { firstFrameLogged = true; GatewayState.log("📷 鏡頭已取得畫面 ${bmp.width}x${bmp.height}") }
+                            } catch (e: Throwable) {
+                                if (! frameErrLogged) { frameErrLogged = true; GatewayState.log("鏡頭取幀失敗：${e.message}") }
+                            } finally { img.close() }
                         }
                         val selector = if (lensBack) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
                         p.unbindAll()
