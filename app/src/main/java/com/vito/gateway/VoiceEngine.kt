@@ -47,6 +47,7 @@ object VoiceEngine {
             try { MediaProjectionService.stop(app) } catch (_: Throwable) {}
             try { CameraCapture.stop() } catch (_: Throwable) {}
             try { VisionOverlay.hide() } catch (_: Throwable) {}
+            sendPromptUpdate()   // 通知 voice_server：vision 關閉
             return
         }
         // 投影中 App 多半在背景 → 用懸浮視窗顯示 AI 回應
@@ -61,6 +62,7 @@ object VoiceEngine {
             try { CameraCapture.stop() } catch (_: Throwable) {}
         }
         liveVision.value = mode
+        sendPromptUpdate()   // 通知 voice_server：vision 開啟 → 一律帶當前畫面回答
         if (liveVisionRunning) return   // 已在跑 → 只切來源（liveVision.value 已更新）
         liveVisionRunning = true
         thread(name = "live-vision") {
@@ -177,6 +179,7 @@ object VoiceEngine {
         put("prompt", ""); put("session", session)
         put("wake", wakeMode); put("bargeIn", bargeIn)
         put("driving", drivingMode.value)
+        put("vision", liveVision.value != "off")   // 投影/鏡頭開啟 → 語音一律上 PAI 帶當前畫面回答
         geo?.let { put("geo", JSONObject().put("lat", it.first).put("lng", it.second)) }
     }
 
