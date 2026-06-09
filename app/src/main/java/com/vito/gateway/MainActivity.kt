@@ -698,6 +698,23 @@ fun VoiceTab() {
                 Text(if (live) "🖥 投影中（AI 正在看畫面）· 點此停止" else "🖥 螢幕投影給 AI 看（可選 App）", fontSize = 13.sp)
             }
         }
+        Spacer(Modifier.height(6.dp))
+        // 鏡頭即時投影：AI 邊聽邊看鏡頭（看世界）
+        run {
+            val cam = VoiceEngine.liveVision.value == "camera"
+            OutlinedButton(
+                onClick = { VoiceEngine.setLiveVision(ctx, if (cam) "off" else "camera") },
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (cam) Color(0xFF065F46) else Color.Transparent,
+                    contentColor = if (cam) Color(0xFF6EE7B7) else CyberCyan
+                ),
+                border = BorderStroke(1.dp, if (cam) Color(0xFF34D399) else CyberCyan.copy(alpha = 0.5f))
+            ) {
+                Icon(Icons.Default.PhotoCamera, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (cam) "📷 鏡頭投影中（AI 正在看鏡頭）· 點此停止" else "📷 鏡頭投影給 AI 看", fontSize = 13.sp)
+            }
+        }
         Spacer(Modifier.height(8.dp))
 
         // 字幕區（佔剩餘空間、可上下滑；內容更新自動捲到最新）

@@ -77,4 +77,8 @@ dependencies {
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     // 全雙工語音（Socket.IO 連 voice_server）
     implementation("io.socket:socket.io-client:2.1.0") { exclude(group = "org.json", module = "json") }
+    // 鏡頭即時擷取（live vision 鏡頭模式）
+    implementation("androidx.camera:camera-core:1.3.4")
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
 }

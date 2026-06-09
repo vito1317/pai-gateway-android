@@ -47,6 +47,12 @@ object VoiceEngine {
             try { CameraCapture.stop() } catch (_: Throwable) {}
             return
         }
+        if (mode == "camera") {
+            try { CameraCapture.start(app) } catch (_: Throwable) {}
+            try { MediaProjectionService.stop(app) } catch (_: Throwable) {}   // 與螢幕投影互斥
+        } else if (mode == "screen") {
+            try { CameraCapture.stop() } catch (_: Throwable) {}
+        }
         liveVision.value = mode
         if (liveVisionRunning) return   // 已在跑 → 只切來源（liveVision.value 已更新）
         liveVisionRunning = true
