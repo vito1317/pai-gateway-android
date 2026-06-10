@@ -95,6 +95,7 @@ object VoiceEngine {
     private var appCtx: android.content.Context? = null
     @Volatile private var wakeMode = false
     @Volatile private var session = ""
+    @Volatile private var nodeName = ""
     @Volatile private var geo: Pair<Double, Double>? = null
 
     private const val IN_RATE = 16000
@@ -112,6 +113,7 @@ object VoiceEngine {
         appCtx = ctx.applicationContext
         wakeMode = wake
         session = Prefs(ctx).voiceSession   // 持久化 session → 關 App 再開接續同一段對話
+        nodeName = Prefs(ctx).nodeName      // 這台裝置的節點名 → 操作預設跑「當前裝置」（平板說話就跑平板）
         // 抓定位給 geo（附近搜尋/天氣用）：先用 lastKnown，沒有就主動要一次新定位再補送
         geo = DeviceTools.latLng(appCtx!!)
         if (geo == null) DeviceTools.requestFreshLocation(appCtx!!) { la, lo -> geo = la to lo; sendPromptUpdate() }
@@ -180,6 +182,7 @@ object VoiceEngine {
         put("wake", wakeMode); put("bargeIn", bargeIn)
         put("driving", drivingMode.value)
         put("vision", liveVision.value != "off")   // 投影/鏡頭開啟 → 語音一律上 PAI 帶當前畫面回答
+        put("node", nodeName)                       // 當前裝置 → 操作預設跑這台
         geo?.let { put("geo", JSONObject().put("lat", it.first).put("lng", it.second)) }
     }
 
