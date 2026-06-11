@@ -43,6 +43,9 @@ class GatewayService : Service() {
                 ReversePoller.start(this, prefs.paiBase, prefs.registerToken, prefs.nodeName)
             }
         }.start()
+
+        // paigent 主動感知通道：裝置事件（電量低/儲存不足）推回平台 /webhooks/{node}
+        Sentinel.start(this, prefs.paiBase, prefs.nodeName)
     }
 
     private var wakeLock: android.os.PowerManager.WakeLock? = null
@@ -56,6 +59,7 @@ class GatewayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         ReversePoller.stop()
+        Sentinel.stop()
         try { server?.stop() } catch (e: Throwable) {}
         try { wakeLock?.release() } catch (e: Throwable) {}
         GatewayState.running.value = false
