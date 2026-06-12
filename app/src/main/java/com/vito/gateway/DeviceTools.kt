@@ -414,6 +414,30 @@ object DeviceTools {
         }
     }
 
+    /** 依標題（模糊比對）刪除手機行事曆事件。回刪除筆數。 */
+    fun calendarDelete(ctx: Context, titleQuery: String): String {
+        return try {
+            if (titleQuery.isBlank()) return "請給要刪除的事件標題關鍵字。"
+            val proj = arrayOf(android.provider.CalendarContract.Events._ID, android.provider.CalendarContract.Events.TITLE)
+            val ids = mutableListOf<Pair<Long, String>>()
+            ctx.contentResolver.query(
+                android.provider.CalendarContract.Events.CONTENT_URI, proj,
+                "${android.provider.CalendarContract.Events.TITLE} LIKE ?", arrayOf("%$titleQuery%"), null
+            )?.use { c -> while (c.moveToNext()) ids.add(c.getLong(0) to (c.getString(1) ?: "")) }
+            if (ids.isEmpty()) return "找不到標題含「$titleQuery」的事件。"
+            var n = 0
+            for ((id, _) in ids) {
+                val u = android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, id)
+                n += ctx.contentResolver.delete(u, null, null)
+            }
+            "已刪除 $n 筆標題含「$titleQuery」的行事曆事件：" + ids.joinToString("、") { it.second }.take(120)
+        } catch (e: SecurityException) {
+            "需要行事曆寫入權限。"
+        } catch (e: Throwable) {
+            "刪除行事曆失敗：${e.message}"
+        }
+    }
+
     /** 讀手機便箋（先試小米/HyperOS 便箋 provider；讀不到回提示，讓 AI 改用開 App+看畫面）。 */
     fun notesRead(ctx: Context, limit: Int): String {
         val uris = listOf(

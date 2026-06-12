@@ -85,6 +85,7 @@ object McpTools {
         tool("calendar_read", "讀使用者手機上的行事曆未來幾天事件（不需任何 API，直接讀裝置同步好的行事曆）。days=往後幾天（預設7）。", JSONObject().put("days", s("往後幾天，預設7")), JSONArray())
         tool("calendar_add", "在手機行事曆新增事件（不需 API，直接寫進裝置行事曆）。start 格式「yyyy-MM-dd HH:mm」(台北時間)；duration_min 預設60；location 可選。", JSONObject().put("title", s("事件標題")).put("start", s("開始時間 yyyy-MM-dd HH:mm")).put("duration_min", s("時長分鐘，預設60")).put("location", s("地點，可選")), JSONArray().put("title").put("start"))
         tool("notes_read", "讀手機便箋/筆記（先試小米便箋；讀不到時改用 open_app 開筆記 App 再 screen_shot 看畫面）。limit=讀幾則（預設10）。", JSONObject().put("limit", s("讀幾則，預設10")), JSONArray())
+        tool("calendar_delete", "依標題關鍵字刪除手機行事曆事件（模糊比對，會刪掉所有符合的）。", JSONObject().put("title", s("要刪除的事件標題關鍵字")), JSONArray().put("title"))
         tool("phone_toast", "在手機螢幕顯示一則浮動提示。", JSONObject().put("text", s("文字")), JSONArray().put("text"))
         tool("app_foreground", "把 PAI App 帶到前景顯示（提醒/需要使用者看畫面時用）。tab 可選：node/chat/voice/auto/browser。", JSONObject().put("tab", s("要切到的分頁，可留空")), JSONArray())
         tool("show_document", "把一份文件/報告/長內容『自動彈出』顯示在使用者手機（App 在前景直接彈窗顯示完整內容，背景則發通知點開）。整理報告、行程、總結、產生文件輸出給使用者時用這個——比 phone_notify 適合長內容。可選 url 附上可下載/分享的連結。",
@@ -165,6 +166,7 @@ object McpTools {
             "calendar_read" -> DeviceTools.calendarRead(ctx, args.optInt("days", 7), args.optBoolean("json", false))
             "calendar_add" -> DeviceTools.calendarAdd(ctx, args.optString("title"), args.optString("start"), args.optInt("duration_min", 60), args.optString("location"))
             "notes_read" -> DeviceTools.notesRead(ctx, args.optInt("limit", 10))
+            "calendar_delete" -> DeviceTools.calendarDelete(ctx, args.optString("title"))
             "voice_start" -> {
                 // 遠端喚醒全雙工語音聆聽（提醒時自動開，讓使用者直接用講的回答）
                 GatewayState.wake.value = true                     // 同步：喚醒開關顯示成開啟
