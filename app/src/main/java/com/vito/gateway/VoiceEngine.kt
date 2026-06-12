@@ -24,6 +24,12 @@ object VoiceEngine {
     // UI 觀察狀態
     val active = mutableStateOf(false)
     val status = mutableStateOf("")
+    val bgMode = mutableStateOf(false)   // 背景模式：縮到背景 + 顯示語音懸浮視窗
+
+    /** 背景模式時把目前狀態/輸入/輸出推到懸浮視窗。 */
+    fun pushOverlay() {
+        if (bgMode.value) appCtx?.let { VoiceOverlay.update(it, status.value, userText.value, transcript.value) }
+    }
     val speaking = mutableStateOf(false)
     val volume = mutableStateOf(0f)
     val transcript = mutableStateOf("")   // AI 回覆字幕
@@ -128,7 +134,7 @@ object VoiceEngine {
             val s = IO.socket(URI.create(origin), opts)
             socket = s
             s.on(Socket.EVENT_CONNECT) {
-                status.value = "已連線 · 請說話"
+                status.value = "已連線 · 請說話"; pushOverlay()
                 s.emit("prompt_text", buildPrompt())
                 s.emit("recording-started")
                 startRecording()
@@ -156,6 +162,7 @@ object VoiceEngine {
                 // 待機提示 → 進待機；其他正常回覆 → 解除待機
                 standby.value = t.contains("待機") || t.contains("💤")
                 if (liveVision.value != "off") appCtx?.let { VisionOverlay.update(it, t, userText.value) }
+                pushOverlay()
             }
             s.on("user_transcript") { args ->
                 // 新的一輪使用者輸入 → 清空上一輪的處理序列、解除待機
@@ -163,6 +170,7 @@ object VoiceEngine {
                 steps.value = ""
                 standby.value = false
                 if (liveVision.value != "off") appCtx?.let { VisionOverlay.update(it, transcript.value, userText.value) }
+                pushOverlay()
             }
             s.on("agent_step") { args ->
                 val t = args.getOrNull(0)?.toString() ?: ""

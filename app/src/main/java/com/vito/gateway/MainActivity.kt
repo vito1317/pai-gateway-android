@@ -43,6 +43,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -635,6 +636,9 @@ fun ManualField(label: String, value: String, onValueChange: (String) -> Unit) {
 fun VoiceTab() {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
+    val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val orbOuter = if (landscape) 110.dp else 200.dp
+    val orbInner = if (landscape) 84.dp else 150.dp
     var wake by GatewayState.wake   // 共用狀態：遠端 voice_start 自動喚醒時，這個開關會同步顯示成開啟
     val active = VoiceEngine.active.value
     val speaking = VoiceEngine.speaking.value
@@ -694,20 +698,20 @@ fun VoiceTab() {
             }
         }
 
-        Spacer(Modifier.weight(1f))
-        // 能量球（隨語音輸入即時脈動 = 語音輸入回饋）
-        Box(Modifier.size(200.dp), contentAlignment = Alignment.Center) {
+        Spacer(Modifier.height(if (landscape) 6.dp else 0.dp).then(if (landscape) Modifier else Modifier.weight(1f)))
+        // 能量球（隨語音輸入即時脈動 = 語音輸入回饋）；橫向縮小避免擠壓底部按鈕
+        Box(Modifier.size(orbOuter), contentAlignment = Alignment.Center) {
             // 說話時的外環光暈
             if (userSpeaking || speaking) {
-                Box(Modifier.size((160 + vol * 240).dp.coerceAtMost(200.dp)).clip(CircleShape)
+                Box(Modifier.size(((orbInner.value + 10) + vol * 240).dp.coerceAtMost(orbOuter.value.dp)).clip(CircleShape)
                     .background(orbColor.copy(alpha = 0.12f)))
             }
             Box(
-                Modifier.size(150.dp).scale(orbScale).clip(CircleShape)
+                Modifier.size(orbInner).scale(orbScale).clip(CircleShape)
                     .background(Brush.radialGradient(listOf(orbColor.copy(alpha = 0.95f), orbColor.copy(alpha = 0.15f))))
             )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(if (landscape) 6.dp else 12.dp))
         Text(phase, color = if (userSpeaking) Color(0xFF22D3EE) else CyberGray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(10.dp))
 
@@ -806,6 +810,21 @@ fun VoiceTab() {
                 onClick = { photoLauncher.launch(null) },
                 modifier = Modifier.size(52.dp).clip(CircleShape).background(CyberSurface)
             ) { Icon(Icons.Default.PhotoCamera, "拍照問 AI", tint = CyberCyan) }
+            // 🪟 背景模式：縮到背景 + 懸浮視窗顯示狀態/輸入/輸出（需懸浮窗權限）
+            if (active) {
+                IconButton(
+                    onClick = {
+                        if (!VoiceOverlay.canDraw(ctx)) {
+                            VoiceOverlay.requestPermission(ctx)
+                        } else {
+                            VoiceEngine.bgMode.value = true
+                            VoiceOverlay.show(ctx); VoiceEngine.pushOverlay()
+                            (ctx as? android.app.Activity)?.moveTaskToBack(true)
+                        }
+                    },
+                    modifier = Modifier.size(52.dp).clip(CircleShape).background(CyberSurface)
+                ) { Icon(Icons.Default.PictureInPictureAlt, "背景模式", tint = CyberCyan) }
+            }
         }
         Spacer(Modifier.height(8.dp))
     }
