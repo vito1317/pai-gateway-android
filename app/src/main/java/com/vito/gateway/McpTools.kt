@@ -158,6 +158,15 @@ object McpTools {
             "share_text" -> DeviceTools.shareText(ctx, args.optString("text"))
             "phone_speak" -> DeviceTools.speak(ctx, args.optString("text"))
             "phone_toast" -> DeviceTools.toast(ctx, args.optString("text"))
+            "voice_start" -> {
+                // 遠端喚醒全雙工語音聆聽（提醒時自動開，讓使用者直接用講的回答）
+                if (!VoiceEngine.active.value) {
+                    GatewayState.autoStartVoice.value = true       // UI 在前景 → 切語音分頁並開
+                    GatewayState.requestTab.value = "voice"
+                    try { VoiceEngine.start(ctx.applicationContext, Prefs(ctx).paiBase, true) } catch (_: Throwable) {}
+                }
+                "已喚醒語音聆聽"
+            }
             "show_document" -> {
                 val content = args.optString("content").ifEmpty { args.optString("text") }
                 val title = args.optString("title").ifEmpty { "PAI 文件" }
