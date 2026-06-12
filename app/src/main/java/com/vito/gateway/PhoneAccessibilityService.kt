@@ -122,7 +122,7 @@ class PhoneAccessibilityService : AccessibilityService() {
         val el = find(target)
         // 先點該位置聚焦
         if (el != null) tapAt(el.rect.centerX().toFloat(), el.rect.centerY().toFloat())
-        Thread.sleep(500)
+        Thread.sleep(250)
         val root = rootInActiveWindow ?: return "讀不到畫面"
         val node = findEditable(root, el?.rect) ?: return "找不到輸入框——先 screen_snapshot 確認"
         val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
@@ -166,7 +166,7 @@ class PhoneAccessibilityService : AccessibilityService() {
         return if (ok) "已滑動 $direction\n\n" + snapAfter() else "滑動失敗"
     }
 
-    fun back(): String { performGlobalAction(GLOBAL_ACTION_BACK); Thread.sleep(600); return "已按返回\n\n" + snapAfter() }
+    fun back(): String { performGlobalAction(GLOBAL_ACTION_BACK); Thread.sleep(350); return "已按返回\n\n" + snapAfter() }
     fun home(): String { performGlobalAction(GLOBAL_ACTION_HOME); return "已回主畫面" }
 
     private fun tapAt(x: Float, y: Float): Boolean {
@@ -188,7 +188,7 @@ class PhoneAccessibilityService : AccessibilityService() {
     }
 
     private fun snapAfter(): String {
-        Thread.sleep(700)
+        Thread.sleep(350)
         return snapshot()
     }
 
