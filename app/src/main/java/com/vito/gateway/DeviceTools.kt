@@ -414,6 +414,34 @@ object DeviceTools {
         }
     }
 
+    /** 讀手機便箋（先試小米/HyperOS 便箋 provider；讀不到回提示，讓 AI 改用開 App+看畫面）。 */
+    fun notesRead(ctx: Context, limit: Int): String {
+        val uris = listOf(
+            "content://com.miui.notes.provider/note",
+            "content://notes/note",
+            "content://com.miui.notes.api.provider/note"
+        )
+        for (u in uris) {
+            try {
+                val cur = ctx.contentResolver.query(android.net.Uri.parse(u), null, null, null, null) ?: continue
+                cur.use { c ->
+                    val ci = c.getColumnIndex("content").let { if (it >= 0) it else c.getColumnIndex("snippet") }
+                    if (ci < 0) return@use
+                    val sb = StringBuilder()
+                    var n = 0
+                    while (c.moveToNext() && n < limit.coerceIn(1, 50)) {
+                        val t = c.getString(ci)?.trim().orEmpty()
+                        if (t.isNotEmpty()) { sb.append("・").append(t.take(200)).append("\n"); n++ }
+                    }
+                    if (sb.isNotEmpty()) return "便箋（最近 $n 則）：\n$sb"
+                }
+            } catch (_: SecurityException) {
+            } catch (_: Throwable) {
+            }
+        }
+        return "讀不到內建便箋（此手機的筆記 App 沒開放直接讀）。可改用『開啟筆記 App + 看畫面』的方式：先 open_app 打開筆記，再用 screen_shot/screen_read 讀內容。"
+    }
+
     /** 依名稱查通訊錄電話（模糊比對 display name，取第一筆）。 */
     private fun lookupContact(ctx: Context, name: String): String? {
         return try {
