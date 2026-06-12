@@ -4,10 +4,15 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.Calendar
 
 /** 前景服務：跑 MCP server + cloudflared 通道 + 註冊到 PAI，背景持續可被連線。 */
 class GatewayService : Service() {
@@ -46,6 +51,34 @@ class GatewayService : Service() {
 
         // paigent 主動感知通道：裝置事件（電量低/儲存不足）推回平台 /webhooks/{node}
         Sentinel.start(this, prefs.paiBase, prefs.nodeName)
+
+        // 解鎖手機 → 早晨通勤檢查（醒來即提醒，避免時間輪詢時你還沒醒沒看到）
+        registerUnlockReceiver()
+    }
+
+    private var unlockReceiver: BroadcastReceiver? = null
+    private fun registerUnlockReceiver() {
+        if (unlockReceiver != null) return
+        unlockReceiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                if (hour < 4 || hour >= 12) return // 粗略早晨閘門，精準判斷在後端
+                val prefs = Prefs(c)
+                if (prefs.registerToken.isBlank()) return
+                Thread {
+                    try {
+                        val cc = (URL(prefs.paiBase.trimEnd('/') + "/api/commute/wake").openConnection() as HttpURLConnection).apply {
+                            requestMethod = "POST"; doOutput = true; connectTimeout = 10000; readTimeout = 45000
+                            setRequestProperty("Content-Type", "application/json")
+                            setRequestProperty("X-Register-Secret", prefs.registerToken)
+                        }
+                        cc.outputStream.use { it.write("{}".toByteArray()) }
+                        cc.responseCode
+                    } catch (_: Throwable) {}
+                }.start()
+            }
+        }
+        registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT))
     }
 
     private var wakeLock: android.os.PowerManager.WakeLock? = null
@@ -60,6 +93,7 @@ class GatewayService : Service() {
         super.onDestroy()
         ReversePoller.stop()
         Sentinel.stop()
+        try { unlockReceiver?.let { unregisterReceiver(it) } } catch (e: Throwable) {}
         try { server?.stop() } catch (e: Throwable) {}
         try { wakeLock?.release() } catch (e: Throwable) {}
         GatewayState.running.value = false

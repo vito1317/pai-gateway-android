@@ -384,7 +384,44 @@ object DeviceTools {
 
     /** 在原生 Google 地圖 App 顯示路線（WebView 渲染不出地圖，原生 App 一定行）。
      *  destination 必填；origin 空白＝從目前位置；waypoints 用「|」分隔多個途經點。 */
-    fun mapsRoute(ctx: Context, origin: String, destination: String, waypoints: String, mode: String): String {
+    /** 已知導航 App 名稱 → 候選 package（依序試，裝了哪個用哪個）。 */
+    private fun navPackages(app: String): List<String> = when (app.trim().lowercase()) {
+        "waze" -> listOf("com.waze")
+        "導航王", "导航王", "naviking", "navi king", "navigation king", "kingwaytek" ->
+            listOf("com.kingwaytek.naviking", "com.kingwaytek.naviking.std", "com.kingwaytek.naviking3d", "com.kingwaytek.tw.naviking")
+        "papago", "papago!", "研勤" -> listOf("com.mactiwe.papago", "com.papago", "com.maction.papago")
+        "here", "here maps", "heremaps" -> listOf("com.here.app.maps")
+        "osmand" -> listOf("net.osmand.plus", "net.osmand")
+        "maps.me", "mapsme" -> listOf("com.mapswithme.maps.pro")
+        "", "ask", "chooser", "選擇", "詢問", "選單" -> emptyList() // 空=讓使用者選
+        else -> listOf(app) // 其他：直接當 package name
+    }
+
+    fun mapsRoute(ctx: Context, origin: String, destination: String, waypoints: String, mode: String, app: String = ""): String {
+        val a = app.trim().lowercase()
+        // 非 Google 地圖 → 用通用 geo: scheme，各家導航 App（導航王/Waze/PaPaGO…）都能接手
+        if (a.isNotEmpty() && a != "google" && a != "google maps" && a != "google 地圖" && a != "googlemaps") {
+            return try {
+                val geo = android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(destination))
+                val pkgs = navPackages(app)
+                ui {
+                    var ok = false
+                    for (p in pkgs) {
+                        try {
+                            ctx.startActivity(Intent(Intent.ACTION_VIEW, geo).setPackage(p).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); ok = true; break
+                        } catch (_: Throwable) {}
+                    }
+                    if (!ok) { // 指定的沒裝 or 要求選單 → 跳 App 選擇器
+                        try {
+                            ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW, geo), "選擇導航 App").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        } catch (_: Throwable) {
+                            ctx.startActivity(Intent(Intent.ACTION_VIEW, geo).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }
+                    }
+                }
+                "已開啟導航到 $destination" + (if (pkgs.isNotEmpty()) "（$app）" else "（請選擇導航 App）")
+            } catch (e: Throwable) { "開啟導航失敗：${e.message}" }
+        }
         return try {
             val enc = { s: String -> android.net.Uri.encode(s) }
             val sb = StringBuilder("https://www.google.com/maps/dir/?api=1")

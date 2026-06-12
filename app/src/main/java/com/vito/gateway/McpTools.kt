@@ -77,8 +77,8 @@ object McpTools {
             JSONObject().put("query", s("歌名或歌手")))
         tool("media_control", "控制手機媒體播放（對任何在播的音樂 App 有效）：pause/play/next/previous。",
             JSONObject().put("action", s("pause|play|next|previous")), JSONArray().put("action"))
-        tool("maps_route", "在原生 Google 地圖 App【顯示路線/導航】（要在地圖上看到路線就用這個，內建瀏覽器渲染不出地圖）。destination 必填；origin 留空=從目前位置；waypoints 多個途經點用「|」分隔；mode=driving/walking/transit/bicycling。",
-            JSONObject().put("origin", s("起點，留空=目前位置")).put("destination", s("終點")).put("waypoints", s("途經點，用|分隔")).put("mode", s("交通方式 driving/walking/transit/bicycling")),
+        tool("maps_route", "在手機導航 App【顯示路線/導航】。destination 必填；origin 留空=從目前位置；waypoints 多個途經點用「|」分隔；mode=driving/walking/transit/bicycling；app=導航 App（google/導航王/waze/papago/here/osmand，或留空讓使用者選）。",
+            JSONObject().put("origin", s("起點，留空=目前位置")).put("destination", s("終點")).put("waypoints", s("途經點，用|分隔")).put("mode", s("交通方式 driving/walking/transit/bicycling")).put("app", s("導航 App：google/導航王/waze/papago/here/osmand，留空=讓使用者選")),
             JSONArray().put("destination"))
         tool("share_text", "用手機分享選單把文字/連結分享出去。", JSONObject().put("text", s("文字")), JSONArray().put("text"))
         tool("phone_speak", "用手機系統語音念出文字（手機 TTS）。", JSONObject().put("text", s("文字")), JSONArray().put("text"))
@@ -154,7 +154,7 @@ object McpTools {
             "screen_back" -> PhoneAccessibilityService.instance?.back() ?: accNeed(ctx)
             "screen_home" -> PhoneAccessibilityService.instance?.home() ?: accNeed(ctx)
             "screen_shot" -> PhoneAccessibilityService.instance?.screenshotB64() ?: accNeed(ctx)
-            "maps_route" -> DeviceTools.mapsRoute(ctx, args.optString("origin"), args.optString("destination"), args.optString("waypoints"), args.optString("mode"))
+            "maps_route" -> DeviceTools.mapsRoute(ctx, args.optString("origin"), args.optString("destination"), args.optString("waypoints"), args.optString("mode"), args.optString("app"))
             "share_text" -> DeviceTools.shareText(ctx, args.optString("text"))
             "phone_speak" -> DeviceTools.speak(ctx, args.optString("text"))
             "phone_toast" -> DeviceTools.toast(ctx, args.optString("text"))
