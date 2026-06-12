@@ -84,8 +84,27 @@ object ControlOverlay {
             textSize = 12f
             setPadding(0, px(3), 0, 0)
         }
+        val cancelView = TextView(app).apply {
+            text = "✖ 取消操作"
+            setTextColor(Color.parseColor("#FB7185"))
+            textSize = 12f
+            setPadding(px(8), px(5), px(8), px(5))
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = px(8).toFloat()
+                setColor(Color.parseColor("#33F43F5E"))
+            }
+            setOnClickListener {
+                // 中止後端 agent（不再對手機下指令）+ 收掉浮框
+                NotifAction.post(app, "/api/agent/abort", "{}", "已取消操作")
+                hide()
+            }
+        }
         card.addView(titleView)
         card.addView(actionView)
+        val btnRow = LinearLayout(app).apply { setPadding(0, px(8), 0, 0) }
+        btnRow.addView(cancelView)
+        card.addView(btnRow)
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY

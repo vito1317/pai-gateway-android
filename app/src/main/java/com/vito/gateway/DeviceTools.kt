@@ -79,6 +79,7 @@ object DeviceTools {
             val intent = Intent(ctx, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra("notice_title", title); putExtra("notice_text", text)
+                if (actions != null) putExtra("notice_actions", actions.toString()) // in-app 彈窗也顯示按鈕
             }
             val flag = PendingIntent.FLAG_UPDATE_CURRENT or
                 (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)

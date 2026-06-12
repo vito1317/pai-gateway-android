@@ -15,6 +15,7 @@ object GatewayState {
     val noticeText = mutableStateOf("")   // 點通知/show_document 時要顯示的完整內容
     val noticeTitle = mutableStateOf("PAI 通知")
     val noticeUrl = mutableStateOf("")    // 文件可下載/分享連結（可選）
+    val noticeActions = mutableStateOf("")  // 通知動作按鈕 JSON 陣列（HITL 接受/拒絕等），in-app 彈窗也顯示
     val logs = mutableStateListOf<String>()
 
     fun log(s: String) {

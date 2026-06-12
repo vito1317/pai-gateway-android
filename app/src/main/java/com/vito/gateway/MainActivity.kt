@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity() {
                 // 先設標題（沒帶就用預設），避免沿用上一則（如「看圖結果」）的舊標題
                 GatewayState.noticeTitle.value = intent.getStringExtra("notice_title")?.ifEmpty { "PAI 通知" } ?: "PAI 通知"
                 GatewayState.noticeUrl.value = ""
+                GatewayState.noticeActions.value = intent.getStringExtra("notice_actions") ?: ""
                 GatewayState.noticeText.value = it
             }
         }
@@ -123,6 +124,7 @@ enum class NavItem(val label: String, val icon: ImageVector) {
     Node("節點", Icons.Default.Dns),
     Chat("訊息", Icons.Default.Chat),
     Voice("語音", Icons.Default.Mic),
+    Auto("自動化", Icons.Default.Bolt),
     Browser("瀏覽器", Icons.Default.Language)
 }
 
@@ -195,6 +197,7 @@ fun RootScreen() {
                 NavItem.Node -> Box(Modifier.fillMaxSize().zIndex(2f).background(CyberBackground)) { GatewayTab() }
                 NavItem.Chat -> Box(Modifier.fillMaxSize().zIndex(2f).background(CyberBackground)) { ChatTab() }
                 NavItem.Voice -> Box(Modifier.fillMaxSize().zIndex(2f).background(CyberBackground)) { VoiceTab() }
+                NavItem.Auto -> Box(Modifier.fillMaxSize().zIndex(2f).background(CyberBackground)) { AutomationsTab() }
                 NavItem.Browser -> {}
             }
             // 操作瀏覽器時：右下角顯示語音迷你卡（即時狀態/處理步驟/回覆摘要），點一下回語音分頁
@@ -211,6 +214,10 @@ fun RootScreen() {
     if (GatewayState.noticeText.value.isNotEmpty()) {
         val ctx = LocalContext.current
         val url = GatewayState.noticeUrl.value
+        // 動作按鈕（HITL 接受/拒絕等）：與通知欄相同，按下帶憑證 POST 到 path
+        val noticeActions = remember(GatewayState.noticeActions.value) {
+            runCatching { org.json.JSONArray(GatewayState.noticeActions.value) }.getOrNull()
+        }
         AlertDialog(
             onDismissRequest = { GatewayState.noticeText.value = "" },
             confirmButton = { TextButton(onClick = { GatewayState.noticeText.value = "" }) { Text("關閉", color = CyberCyan) } },
@@ -224,6 +231,23 @@ fun RootScreen() {
             text = {
                 Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
                     Text(renderMarkdown(GatewayState.noticeText.value), color = Color.White, fontSize = 14.sp)
+                    if (noticeActions != null && noticeActions.length() > 0) {
+                        Spacer(Modifier.height(12.dp))
+                        for (i in 0 until noticeActions.length()) {
+                            val a = noticeActions.optJSONObject(i) ?: continue
+                            val label = a.optString("label"); val path = a.optString("path")
+                            if (label.isEmpty() || path.isEmpty()) continue
+                            val body = a.optJSONObject("body")?.toString() ?: "{}"
+                            Button(
+                                onClick = {
+                                    NotifAction.post(ctx, path, body, label)
+                                    GatewayState.noticeText.value = ""
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = CyberCyan.copy(alpha = 0.18f), contentColor = CyberCyan)
+                            ) { Text(label) }
+                        }
+                    }
                 }
             },
             containerColor = CyberSurface
