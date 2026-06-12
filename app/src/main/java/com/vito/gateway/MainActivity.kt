@@ -111,7 +111,8 @@ class MainActivity : ComponentActivity() {
 
     private fun requestRuntimePerms() {
         val want = mutableListOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA,
-            Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.CALL_PHONE, Manifest.permission.READ_CONTACTS)
+            Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.CALL_PHONE, Manifest.permission.READ_CONTACTS,
+            Manifest.permission.READ_CALENDAR)
         if (Build.VERSION.SDK_INT >= 33) want.add(Manifest.permission.POST_NOTIFICATIONS)
         val missing = want.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) {

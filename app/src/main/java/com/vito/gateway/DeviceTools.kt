@@ -331,6 +331,44 @@ object DeviceTools {
         } catch (e: Throwable) { "撥打失敗：${e.message}" }
     }
 
+    /** 讀手機行事曆未來 N 天的事件（不需任何 API/iCal，直接讀裝置同步好的行事曆）。 */
+    fun calendarRead(ctx: Context, days: Int): String {
+        return try {
+            val now = System.currentTimeMillis()
+            val end = now + days.coerceIn(1, 60) * 86400000L
+            val uri = android.provider.CalendarContract.Instances.CONTENT_URI.buildUpon()
+            android.content.ContentUris.appendId(uri, now)
+            android.content.ContentUris.appendId(uri, end)
+            val proj = arrayOf(
+                android.provider.CalendarContract.Instances.TITLE,
+                android.provider.CalendarContract.Instances.BEGIN,
+                android.provider.CalendarContract.Instances.EVENT_LOCATION,
+                android.provider.CalendarContract.Instances.ALL_DAY
+            )
+            val sb = StringBuilder()
+            val fmt = java.text.SimpleDateFormat("MM/dd(EEE) HH:mm", java.util.Locale.TAIWAN)
+            val fmtDay = java.text.SimpleDateFormat("MM/dd(EEE)", java.util.Locale.TAIWAN)
+            ctx.contentResolver.query(uri.build(), proj, null, null,
+                android.provider.CalendarContract.Instances.BEGIN + " ASC")?.use { c ->
+                var n = 0
+                while (c.moveToNext() && n < 30) {
+                    val title = c.getString(0)?.ifBlank { "(無標題)" } ?: "(無標題)"
+                    val begin = c.getLong(1)
+                    val loc = c.getString(2).orEmpty()
+                    val allDay = c.getInt(3) == 1
+                    val whenTxt = if (allDay) fmtDay.format(java.util.Date(begin)) + " 整天" else fmt.format(java.util.Date(begin))
+                    sb.append("・$whenTxt $title").append(if (loc.isNotBlank()) "（$loc）" else "").append("\n")
+                    n++
+                }
+            }
+            if (sb.isEmpty()) "未來 $days 天沒有行事曆事件。" else "未來 $days 天的行程：\n$sb"
+        } catch (e: SecurityException) {
+            "需要行事曆讀取權限（請到 App 設定開啟）。"
+        } catch (e: Throwable) {
+            "讀行事曆失敗：${e.message}"
+        }
+    }
+
     /** 依名稱查通訊錄電話（模糊比對 display name，取第一筆）。 */
     private fun lookupContact(ctx: Context, name: String): String? {
         return try {

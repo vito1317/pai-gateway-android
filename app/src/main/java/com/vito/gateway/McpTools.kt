@@ -82,6 +82,7 @@ object McpTools {
             JSONArray().put("destination"))
         tool("share_text", "用手機分享選單把文字/連結分享出去。", JSONObject().put("text", s("文字")), JSONArray().put("text"))
         tool("phone_speak", "用手機系統語音念出文字（手機 TTS）。", JSONObject().put("text", s("文字")), JSONArray().put("text"))
+        tool("calendar_read", "讀使用者手機上的行事曆未來幾天事件（不需任何 API，直接讀裝置同步好的行事曆）。days=往後幾天（預設7）。", JSONObject().put("days", s("往後幾天，預設7")), JSONArray())
         tool("phone_toast", "在手機螢幕顯示一則浮動提示。", JSONObject().put("text", s("文字")), JSONArray().put("text"))
         tool("show_document", "把一份文件/報告/長內容『自動彈出』顯示在使用者手機（App 在前景直接彈窗顯示完整內容，背景則發通知點開）。整理報告、行程、總結、產生文件輸出給使用者時用這個——比 phone_notify 適合長內容。可選 url 附上可下載/分享的連結。",
             JSONObject().put("title", s("標題")).put("content", s("文件完整內容（支援 markdown）")).put("url", s("可選：檔案/分享連結")),
@@ -158,6 +159,7 @@ object McpTools {
             "share_text" -> DeviceTools.shareText(ctx, args.optString("text"))
             "phone_speak" -> DeviceTools.speak(ctx, args.optString("text"))
             "phone_toast" -> DeviceTools.toast(ctx, args.optString("text"))
+            "calendar_read" -> DeviceTools.calendarRead(ctx, args.optInt("days", 7))
             "voice_start" -> {
                 // 遠端喚醒全雙工語音聆聽（提醒時自動開，讓使用者直接用講的回答）
                 if (!VoiceEngine.active.value) {
