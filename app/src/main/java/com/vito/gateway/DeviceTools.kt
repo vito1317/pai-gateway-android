@@ -592,14 +592,20 @@ object DeviceTools {
     }
 
     @Volatile private var tts: TextToSpeech? = null
+    /** 去掉 emoji / 符號圖示，避免 TTS 把表情念出來。 */
+    private fun stripEmoji(s: String): String =
+        s.replace(Regex("[\\x{1F000}-\\x{1FAFF}\\x{1F100}-\\x{1F1FF}\\x{2190}-\\x{21FF}\\x{2300}-\\x{27BF}\\x{2B00}-\\x{2BFF}\\x{FE00}-\\x{FE0F}\\x{200D}\\x{2122}\\x{2139}\\x{3030}\\x{303D}]"), "")
+            .replace(Regex("[ \\t]{2,}"), " ").trim()
+
     fun speak(ctx: Context, text: String): String {
+        val say = stripEmoji(text).ifBlank { text }
         return try {
             val t = tts
-            if (t != null) { t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "pai"); return "已用手機念出" }
+            if (t != null) { t.speak(say, TextToSpeech.QUEUE_FLUSH, null, "pai"); return "已用手機念出" }
             tts = TextToSpeech(ctx.applicationContext) { st ->
                 if (st == TextToSpeech.SUCCESS) {
                     tts?.language = Locale.TAIWAN
-                    tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "pai")
+                    tts?.speak(say, TextToSpeech.QUEUE_FLUSH, null, "pai")
                 }
             }
             "已用手機念出"
