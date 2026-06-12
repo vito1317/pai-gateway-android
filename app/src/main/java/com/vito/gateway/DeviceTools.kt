@@ -331,8 +331,8 @@ object DeviceTools {
         } catch (e: Throwable) { "撥打失敗：${e.message}" }
     }
 
-    /** 讀手機行事曆未來 N 天的事件（不需任何 API/iCal，直接讀裝置同步好的行事曆）。 */
-    fun calendarRead(ctx: Context, days: Int): String {
+    /** 讀手機行事曆未來 N 天的事件（不需任何 API/iCal，直接讀裝置同步好的行事曆）。json=true 回機器可解析的 JSON。 */
+    fun calendarRead(ctx: Context, days: Int, json: Boolean = false): String {
         return try {
             val now = System.currentTimeMillis()
             val end = now + days.coerceIn(1, 60) * 86400000L
@@ -346,26 +346,71 @@ object DeviceTools {
                 android.provider.CalendarContract.Instances.ALL_DAY
             )
             val sb = StringBuilder()
+            val arr = org.json.JSONArray()
             val fmt = java.text.SimpleDateFormat("MM/dd(EEE) HH:mm", java.util.Locale.TAIWAN)
             val fmtDay = java.text.SimpleDateFormat("MM/dd(EEE)", java.util.Locale.TAIWAN)
             ctx.contentResolver.query(uri.build(), proj, null, null,
                 android.provider.CalendarContract.Instances.BEGIN + " ASC")?.use { c ->
                 var n = 0
-                while (c.moveToNext() && n < 30) {
+                while (c.moveToNext() && n < 50) {
                     val title = c.getString(0)?.ifBlank { "(無標題)" } ?: "(無標題)"
                     val begin = c.getLong(1)
                     val loc = c.getString(2).orEmpty()
                     val allDay = c.getInt(3) == 1
-                    val whenTxt = if (allDay) fmtDay.format(java.util.Date(begin)) + " 整天" else fmt.format(java.util.Date(begin))
-                    sb.append("・$whenTxt $title").append(if (loc.isNotBlank()) "（$loc）" else "").append("\n")
+                    if (json) {
+                        arr.put(org.json.JSONObject().put("title", title).put("begin", begin).put("location", loc).put("all_day", allDay))
+                    } else {
+                        val whenTxt = if (allDay) fmtDay.format(java.util.Date(begin)) + " 整天" else fmt.format(java.util.Date(begin))
+                        sb.append("・$whenTxt $title").append(if (loc.isNotBlank()) "（$loc）" else "").append("\n")
+                    }
                     n++
                 }
             }
+            if (json) return arr.toString()
             if (sb.isEmpty()) "未來 $days 天沒有行事曆事件。" else "未來 $days 天的行程：\n$sb"
         } catch (e: SecurityException) {
-            "需要行事曆讀取權限（請到 App 設定開啟）。"
+            if (json) "[]" else "需要行事曆讀取權限（請到 App 設定開啟）。"
         } catch (e: Throwable) {
-            "讀行事曆失敗：${e.message}"
+            if (json) "[]" else "讀行事曆失敗：${e.message}"
+        }
+    }
+
+    /** 在手機行事曆新增事件（免 API）。start 格式「yyyy-MM-dd HH:mm」；durationMin 預設 60。 */
+    fun calendarAdd(ctx: Context, title: String, start: String, durationMin: Int, location: String): String {
+        return try {
+            if (title.isBlank() || start.isBlank()) return "需要事件標題與開始時間。"
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.TAIWAN)
+            fmt.timeZone = java.util.TimeZone.getTimeZone("Asia/Taipei")
+            val begin = (fmt.parse(start.trim()) ?: return "時間格式需為 yyyy-MM-dd HH:mm。").time
+            val dur = (if (durationMin <= 0) 60 else durationMin)
+            // 找主要行事曆 id
+            var calId = -1L
+            ctx.contentResolver.query(
+                android.provider.CalendarContract.Calendars.CONTENT_URI,
+                arrayOf(android.provider.CalendarContract.Calendars._ID, android.provider.CalendarContract.Calendars.IS_PRIMARY),
+                null, null, null
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getLong(0)
+                    if (calId < 0) calId = id
+                    if (c.getInt(1) == 1) { calId = id; break }
+                }
+            }
+            if (calId < 0) return "找不到可寫入的行事曆。"
+            val values = android.content.ContentValues().apply {
+                put(android.provider.CalendarContract.Events.CALENDAR_ID, calId)
+                put(android.provider.CalendarContract.Events.TITLE, title)
+                put(android.provider.CalendarContract.Events.DTSTART, begin)
+                put(android.provider.CalendarContract.Events.DTEND, begin + dur * 60000L)
+                if (location.isNotBlank()) put(android.provider.CalendarContract.Events.EVENT_LOCATION, location)
+                put(android.provider.CalendarContract.Events.EVENT_TIMEZONE, "Asia/Taipei")
+            }
+            val u = ctx.contentResolver.insert(android.provider.CalendarContract.Events.CONTENT_URI, values)
+            if (u != null) "已新增行事曆：$title（$start）" + (if (location.isNotBlank()) "（$location）" else "") else "新增失敗。"
+        } catch (e: SecurityException) {
+            "需要行事曆寫入權限（請到 App 設定開啟）。"
+        } catch (e: Throwable) {
+            "新增行事曆失敗：${e.message}"
         }
     }
 

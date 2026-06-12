@@ -27,6 +27,7 @@ fun AutomationsTab() {
     val ctx = LocalContext.current
     var autos by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var thoughts by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var builtins by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var status by remember { mutableStateOf("載入中…") }
     var refreshKey by remember { mutableStateOf(0) }
 
@@ -44,6 +45,7 @@ fun AutomationsTab() {
                 val j = JSONObject(raw)
                 autos = (j.optJSONArray("automations") ?: JSONArray()).let { arr -> (0 until arr.length()).map { arr.getJSONObject(it) } }
                 thoughts = (j.optJSONArray("thoughts") ?: JSONArray()).let { arr -> (0 until arr.length()).map { arr.getJSONObject(it) } }
+                builtins = (j.optJSONArray("builtins") ?: JSONArray()).let { arr -> (0 until arr.length()).map { arr.getJSONObject(it) } }
                 status = ""
             } catch (e: Throwable) {
                 status = "載入失敗：${e.message}"
@@ -67,9 +69,43 @@ fun AutomationsTab() {
         }.start()
     }
 
+    fun toggleBuiltin(key: String, enabled: Boolean) {
+        Thread {
+            try {
+                val prefs = Prefs(ctx)
+                val c = (URL(prefs.paiBase.trimEnd('/') + "/api/automations/builtin").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"; doOutput = true; connectTimeout = 12000; readTimeout = 30000
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("X-Register-Secret", prefs.registerToken)
+                }
+                c.outputStream.use { it.write(JSONObject().put("key", key).put("enabled", enabled).toString().toByteArray()) }
+                c.responseCode
+            } catch (_: Throwable) {}
+            refreshKey++
+        }.start()
+    }
+
     Column(Modifier.fillMaxSize().background(CyberBackground).verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("🤖 自動化 · AI 主動思考", color = CyberCyan, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         if (status.isNotEmpty()) Text(status, color = CyberGray, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+
+        Text("內建功能（可開關）", color = CyberGray, fontSize = 12.sp, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+        for (b in builtins) {
+            val on = b.optBoolean("enabled")
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(CyberSurface).padding(12.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(b.optString("name"), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(b.optString("desc"), color = CyberGray, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+                }
+                Button(onClick = { toggleBuiltin(b.optString("key"), !on) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (on) Color(0x3310B981) else Color(0x22FFFFFF),
+                        contentColor = if (on) Color(0xFF34D399) else CyberGray)) {
+                    Text(if (on) "已啟用" else "已停用", fontSize = 12.sp)
+                }
+            }
+        }
 
         Text("已建立的功能 / 流程", color = CyberGray, fontSize = 12.sp, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
         if (autos.isEmpty() && status.isEmpty())
