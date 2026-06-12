@@ -169,11 +169,16 @@ object McpTools {
             "calendar_delete" -> DeviceTools.calendarDelete(ctx, args.optString("title"))
             "voice_start" -> {
                 // 遠端喚醒全雙工語音聆聽（提醒時自動開，讓使用者直接用講的回答）
-                GatewayState.wake.value = true                     // 同步：喚醒開關顯示成開啟
-                bringToForeground(ctx, "voice")                    // 把 App 帶到前景並切語音分頁
-                if (!VoiceEngine.active.value) {
-                    GatewayState.autoStartVoice.value = true
-                    try { VoiceEngine.start(ctx.applicationContext, Prefs(ctx).paiBase, true) } catch (_: Throwable) {}
+                // 注意：本方法跑在 ReversePoller 背景執行緒，VoiceEngine.start 需在主執行緒呼叫
+                val app = ctx.applicationContext
+                val base = Prefs(ctx).paiBase
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    GatewayState.wake.value = true                 // 同步：喚醒開關顯示成開啟
+                    bringToForeground(app, "voice")                // 把 App 帶到前景並切語音分頁
+                    GatewayState.autoStartVoice.value = true       // UI 在語音分頁時自動開
+                    if (!VoiceEngine.active.value) {
+                        try { VoiceEngine.start(app, base, true) } catch (_: Throwable) {}
+                    }
                 }
                 "已喚醒語音聆聽"
             }
