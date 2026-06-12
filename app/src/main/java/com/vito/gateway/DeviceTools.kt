@@ -69,7 +69,7 @@ object DeviceTools {
         } catch (_: Throwable) {}
     }
 
-    fun notify(ctx: Context, title: String, text: String): String {
+    fun notify(ctx: Context, title: String, text: String, actions: org.json.JSONArray? = null): String {
         return try {
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val ch = "pai-msg"
@@ -83,12 +83,30 @@ object DeviceTools {
             val flag = PendingIntent.FLAG_UPDATE_CURRENT or
                 (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
             val pi = PendingIntent.getActivity(ctx, text.hashCode(), intent, flag)
+            val notifId = (System.currentTimeMillis() % 100000).toInt()
             val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, ch) else @Suppress("DEPRECATION") Notification.Builder(ctx)
-            nm.notify((System.currentTimeMillis() % 100000).toInt(),
-                b.setContentTitle(title.ifEmpty { "PAI" }).setContentText(text.lineSequence().firstOrNull() ?: text)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info).setAutoCancel(true)
-                    .setContentIntent(pi)
-                    .setStyle(Notification.BigTextStyle().bigText(text)).build())
+            b.setContentTitle(title.ifEmpty { "PAI" }).setContentText(text.lineSequence().firstOrNull() ?: text)
+                .setSmallIcon(android.R.drawable.ic_dialog_info).setAutoCancel(true)
+                .setContentIntent(pi)
+                .setStyle(Notification.BigTextStyle().bigText(text))
+            // 動作按鈕（如 HITL 接受/拒絕）：按下 → NotifActionReceiver 帶憑證 POST 到 path
+            if (actions != null) {
+                for (i in 0 until actions.length()) {
+                    val a = actions.optJSONObject(i) ?: continue
+                    val label = a.optString("label"); val path = a.optString("path")
+                    if (label.isEmpty() || path.isEmpty()) continue
+                    val ai = Intent(ctx, NotifActionReceiver::class.java).apply {
+                        action = "com.vito.gateway.NOTIF_ACTION.$notifId.$i" // 唯一 → PendingIntent 不互蓋
+                        putExtra("path", path)
+                        putExtra("body", a.optJSONObject("body")?.toString() ?: "{}")
+                        putExtra("label", label)
+                        putExtra("notif_id", notifId)
+                    }
+                    val api = PendingIntent.getBroadcast(ctx, (notifId * 31 + i), ai, flag)
+                    b.addAction(Notification.Action.Builder(null, label, api).build())
+                }
+            }
+            nm.notify(notifId, b.build())
             "已發送通知到手機"
         } catch (e: Throwable) { "通知失敗：${e.message}" }
     }

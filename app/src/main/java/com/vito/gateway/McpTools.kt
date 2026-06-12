@@ -109,7 +109,7 @@ object McpTools {
             "open_url" -> openUrl(ctx, args.optString("url"))
             "device_info" -> deviceInfo(ctx)
             "device_location" -> DeviceTools.location(ctx)
-            "phone_notify" -> DeviceTools.notify(ctx, args.optString("title"), args.optString("text"))
+            "phone_notify" -> DeviceTools.notify(ctx, args.optString("title"), args.optString("text"), args.optJSONArray("actions"))
             "clipboard_set" -> DeviceTools.clipboardSet(ctx, args.optString("text"))
             "clipboard_get" -> DeviceTools.clipboardGet(ctx)
             "flashlight" -> DeviceTools.flashlight(ctx, args.optBoolean("on"))

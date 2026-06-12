@@ -95,5 +95,10 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- HITL 核准通知按鈕（接受/拒絕）→ 帶憑證 POST 回 PAI -->
+        <receiver
+            android:name=".NotifActionReceiver"
+            android:exported="false" />
     </application>
 </manifest>
