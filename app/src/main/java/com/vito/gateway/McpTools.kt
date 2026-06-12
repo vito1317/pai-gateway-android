@@ -85,6 +85,7 @@ object McpTools {
         tool("calendar_read", "讀使用者手機上的行事曆未來幾天事件（不需任何 API，直接讀裝置同步好的行事曆）。days=往後幾天（預設7）。", JSONObject().put("days", s("往後幾天，預設7")), JSONArray())
         tool("calendar_add", "在手機行事曆新增事件（不需 API，直接寫進裝置行事曆）。start 格式「yyyy-MM-dd HH:mm」(台北時間)；duration_min 預設60；location 可選。", JSONObject().put("title", s("事件標題")).put("start", s("開始時間 yyyy-MM-dd HH:mm")).put("duration_min", s("時長分鐘，預設60")).put("location", s("地點，可選")), JSONArray().put("title").put("start"))
         tool("phone_toast", "在手機螢幕顯示一則浮動提示。", JSONObject().put("text", s("文字")), JSONArray().put("text"))
+        tool("app_foreground", "把 PAI App 帶到前景顯示（提醒/需要使用者看畫面時用）。tab 可選：node/chat/voice/auto/browser。", JSONObject().put("tab", s("要切到的分頁，可留空")), JSONArray())
         tool("show_document", "把一份文件/報告/長內容『自動彈出』顯示在使用者手機（App 在前景直接彈窗顯示完整內容，背景則發通知點開）。整理報告、行程、總結、產生文件輸出給使用者時用這個——比 phone_notify 適合長內容。可選 url 附上可下載/分享的連結。",
             JSONObject().put("title", s("標題")).put("content", s("文件完整內容（支援 markdown）")).put("url", s("可選：檔案/分享連結")),
             JSONArray().put("content"))
@@ -165,13 +166,14 @@ object McpTools {
             "voice_start" -> {
                 // 遠端喚醒全雙工語音聆聽（提醒時自動開，讓使用者直接用講的回答）
                 GatewayState.wake.value = true                     // 同步：喚醒開關顯示成開啟
+                bringToForeground(ctx, "voice")                    // 把 App 帶到前景並切語音分頁
                 if (!VoiceEngine.active.value) {
-                    GatewayState.autoStartVoice.value = true       // UI 在前景 → 切語音分頁並開
-                    GatewayState.requestTab.value = "voice"
+                    GatewayState.autoStartVoice.value = true
                     try { VoiceEngine.start(ctx.applicationContext, Prefs(ctx).paiBase, true) } catch (_: Throwable) {}
                 }
                 "已喚醒語音聆聽"
             }
+            "app_foreground" -> { bringToForeground(ctx, args.optString("tab")); "已把 App 帶到前景" }
             "show_document" -> {
                 val content = args.optString("content").ifEmpty { args.optString("text") }
                 val title = args.optString("title").ifEmpty { "PAI 文件" }
@@ -207,6 +209,16 @@ object McpTools {
     }
 
     /** 輔助使用服務未連接 → 區分「沒開」與「開了但服務沒連上（常見於小米/HyperOS 把它殺掉）」。 */
+    /** 把 App 帶到前景（提醒時用）。靠 SYSTEM_ALERT_WINDOW 權限可從背景啟動 Activity。tab 可選切到哪個分頁。 */
+    private fun bringToForeground(ctx: Context, tab: String) {
+        if (tab.isNotEmpty()) GatewayState.requestTab.value = tab
+        try {
+            ctx.startActivity(android.content.Intent(ctx, MainActivity::class.java).apply {
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            })
+        } catch (_: Throwable) {}
+    }
+
     private fun accNeed(ctx: Context): String {
         return if (PhoneAccessibilityService.isEnabled(ctx)) {
             // 設定裡是開的，但服務沒連上來（被系統殺掉/尚未啟動）

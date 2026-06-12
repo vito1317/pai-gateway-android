@@ -163,6 +163,7 @@ fun RootScreen() {
             "voice" -> selectedItem = NavItem.Voice
             "node" -> selectedItem = NavItem.Node
             "chat" -> selectedItem = NavItem.Chat
+            "auto" -> selectedItem = NavItem.Auto
         }
         if (GatewayState.requestTab.value.isNotEmpty()) GatewayState.requestTab.value = ""
     }
