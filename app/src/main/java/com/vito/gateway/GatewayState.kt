@@ -10,6 +10,7 @@ object GatewayState {
     var publicUrl = mutableStateOf("")
     var regStatus = mutableStateOf("尚未註冊")
     val autoStartVoice = mutableStateOf(false) // 快速設定磚啟動 → 進語音分頁後自動開語音
+    val wake = mutableStateOf(false)           // 喚醒模式開關（共用：UI 與遠端 voice_start 同步）
     val requestTab = mutableStateOf("")   // 工具呼叫請求切換的分頁（如 "browser"）；UI 處理後清空
     val requestProjection = mutableStateOf(false) // 語音頁按「螢幕投影」→ 請 MainActivity 跳系統同意框
     val noticeText = mutableStateOf("")   // 點通知/show_document 時要顯示的完整內容

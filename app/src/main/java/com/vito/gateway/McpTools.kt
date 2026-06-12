@@ -164,6 +164,7 @@ object McpTools {
             "calendar_add" -> DeviceTools.calendarAdd(ctx, args.optString("title"), args.optString("start"), args.optInt("duration_min", 60), args.optString("location"))
             "voice_start" -> {
                 // 遠端喚醒全雙工語音聆聽（提醒時自動開，讓使用者直接用講的回答）
+                GatewayState.wake.value = true                     // 同步：喚醒開關顯示成開啟
                 if (!VoiceEngine.active.value) {
                     GatewayState.autoStartVoice.value = true       // UI 在前景 → 切語音分頁並開
                     GatewayState.requestTab.value = "voice"

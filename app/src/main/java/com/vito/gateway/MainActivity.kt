@@ -634,7 +634,7 @@ fun ManualField(label: String, value: String, onValueChange: (String) -> Unit) {
 fun VoiceTab() {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
-    var wake by remember { mutableStateOf(false) }
+    var wake by GatewayState.wake   // 共用狀態：遠端 voice_start 自動喚醒時，這個開關會同步顯示成開啟
     val active = VoiceEngine.active.value
     val speaking = VoiceEngine.speaking.value
     val vol = VoiceEngine.volume.value
