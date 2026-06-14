@@ -40,12 +40,33 @@ class GatewayService : Service() {
             GatewayState.regStatus.value = "缺註冊 token（請先配對）"
             return
         }
+        // 自動重試註冊：WAF（Security One / Cloudflare wrangler）偶爾瞬斷會回 500/502/timeout，
+        // 單次註冊失敗就卡死很煩。改成指數退避一直重試，直到成功或服務被停止。
+        // 4xx（token 錯/權限/路由）重試也沒用 → 直接停下來提示使用者。
         Thread {
-            val r = ReversePoller.register(prefs.paiBase, prefs.registerToken, prefs.nodeName)
-            GatewayState.regStatus.value = r
-            GatewayState.log(r)
-            if (r.startsWith("✅")) {
-                ReversePoller.start(this, prefs.paiBase, prefs.registerToken, prefs.nodeName)
+            var delayMs = 3000L
+            var attempt = 0
+            while (GatewayState.running.value) {
+                attempt++
+                val r = ReversePoller.register(prefs.paiBase, prefs.registerToken, prefs.nodeName)
+                if (r.startsWith("✅")) {
+                    GatewayState.regStatus.value = r
+                    GatewayState.log(r)
+                    ReversePoller.start(this, prefs.paiBase, prefs.registerToken, prefs.nodeName)
+                    return@Thread
+                }
+                // 4xx：用戶端問題（token/權限/路由），重試無益 → 停止並提示
+                if (Regex("HTTP 4\\d\\d").containsMatchIn(r)) {
+                    GatewayState.regStatus.value = r
+                    GatewayState.log(r)
+                    return@Thread
+                }
+                // 5xx / timeout / 網路錯誤：WAF 瞬斷，退避後重試
+                val waitS = (delayMs / 1000)
+                GatewayState.regStatus.value = "註冊失敗（第 $attempt 次），${waitS}s 後自動重試…"
+                GatewayState.log("$r → ${waitS}s 後重試")
+                try { Thread.sleep(delayMs) } catch (_: InterruptedException) { return@Thread }
+                delayMs = (delayMs * 2).coerceAtMost(30000L)
             }
         }.start()
 
