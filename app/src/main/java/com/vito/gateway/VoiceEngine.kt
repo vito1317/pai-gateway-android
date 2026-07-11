@@ -46,9 +46,13 @@ object VoiceEngine {
      * mode="camera" → 從 CameraCapture 拉鏡頭畫面；
      * 每 ~2 秒 attach 到語音 session（短 TTL），說話時 AI 用當前畫面回覆。off=停止。
      */
+    /** AI 遠端開的投影（camera_vision 工具）：語音沒連線也持續推畫面（守望/看鏡頭用）。 */
+    @Volatile var remoteVision = false
+
     fun setLiveVision(ctx: android.content.Context, mode: String) {
         val app = ctx.applicationContext
         if (mode != "screen" && mode != "camera") {
+            remoteVision = false
             liveVision.value = "off"; liveVisionRunning = false
             try { MediaProjectionService.stop(app) } catch (_: Throwable) {}
             try { CameraCapture.stop() } catch (_: Throwable) {}
@@ -73,7 +77,7 @@ object VoiceEngine {
         liveVisionRunning = true
         thread(name = "live-vision") {
             var warned = false
-            while (liveVisionRunning && active.value) {
+            while (liveVisionRunning && (active.value || remoteVision)) {
                 try {
                     val img: String? = when (liveVision.value) {
                         "screen" -> MediaProjectionService.instance?.grabB64()

@@ -48,6 +48,8 @@ object McpTools {
         tool("vibrate", "讓手機震動。", JSONObject().put("ms", n("毫秒，預設500")))
         tool("collision_guard", "開/關「前向警戒」：鏡頭本地偵測逼近物體，快撞到時手機即時嗶聲+震動+喊話警示（完全離線）。使用者說「開啟/關閉前向警戒、幫我盯著前面」時用。",
             JSONObject().put("on", b("true=開啟，false=關閉")), JSONArray().put("on"))
+        tool("camera_vision", "開/關「鏡頭投影」：打開手機鏡頭，每2秒把畫面推給 AI 看（守望/即時看世界用）。使用者要 AI 自己開鏡頭、看鏡頭、盯著鏡頭時用。lens=back(預設,看世界)|front(自拍)。",
+            JSONObject().put("on", b("true=開啟，false=關閉")).put("lens", s("back|front，預設 back")), JSONArray().put("on"))
         tool("battery_status", "查手機電量與充電狀態。", JSONObject())
         tool("open_app", "開啟手機上的 app（LINE/YouTube/地圖/Chrome/Spotify/設定/相機…，會查實際安裝的 App 模糊比對名稱）。", JSONObject().put("name", s("app 名稱")), JSONArray().put("name"))
         tool("list_apps", "列出手機已安裝、可開啟的 App（顯示名稱＋套件名）。不確定某 App 在不在、或要給使用者選時用。", JSONObject())
@@ -123,6 +125,23 @@ object McpTools {
             "set_volume" -> DeviceTools.setVolume(ctx, args.optInt("percent"))
             "set_brightness" -> DeviceTools.setBrightness(ctx, args.optInt("percent"))
             "vibrate" -> DeviceTools.vibrate(ctx, args.optLong("ms", 500))
+            "camera_vision" -> {
+                val on = args.optBoolean("on")
+                if (on) {
+                    if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.CAMERA)
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        "沒有相機權限，開不了鏡頭。請開啟 App → 設定 → 權限 → 相機"
+                    } else {
+                        CameraCapture.lensBack = args.optString("lens", "back") != "front"
+                        VoiceEngine.remoteVision = true
+                        VoiceEngine.setLiveVision(ctx, "camera")
+                        "鏡頭已打開，每 2 秒推一張畫面給 AI（session:${Prefs(ctx).voiceSession}）"
+                    }
+                } else {
+                    VoiceEngine.setLiveVision(ctx, "off")
+                    "鏡頭投影已關閉"
+                }
+            }
             "collision_guard" -> {
                 val on = args.optBoolean("on")
                 Prefs(ctx).collisionGuard = on
