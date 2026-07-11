@@ -24,7 +24,8 @@ object CameraCapture {
     private var appCtx: Context? = null
     private val exec = Executors.newSingleThreadExecutor()
     @Volatile var lensBack = true   // true=後鏡頭，false=前鏡頭
-    @Volatile var frameListener: ((Bitmap) -> Unit)? = null   // 每幀回呼（CollisionGuard 本地偵測用）
+    @Volatile var frameListener: ((Bitmap) -> Unit)? = null   // 幀回呼（CollisionGuard 本地偵測用）
+    @Volatile private var lastConvertMs = 0L                  // RGBA→Bitmap+旋轉是每幀最大成本 → 限 10fps
     @Volatile private var firstFrameLogged = false
     @Volatile private var frameErrLogged = false
 
@@ -52,6 +53,11 @@ object CameraCapture {
                             .build()
                         analysis.setAnalyzer(exec) { img ->
                             try {
+                                // 相機 ~30fps，但消費端最快只要 10fps（投影 2s 一張、偵測 5fps）
+                                // → 超過頻率的幀直接丟棄，省掉 2/3 的轉檔+旋轉+GC 成本
+                                val nowMs = System.currentTimeMillis()
+                                if (nowMs - lastConvertMs < 100) return@setAnalyzer // finally 會 close
+                                lastConvertMs = nowMs
                                 val bmp = img.toBitmap()
                                 val rotated = rotate(bmp, img.imageInfo.rotationDegrees)
                                 latest = rotated

@@ -30,6 +30,8 @@ object CollisionGuard {
     private val tracks = HashMap<Int, ArrayDeque<Pair<Long, Float>>>() // trackingId → (時間, 面積比) 歷史
     @Volatile private var confirmStreak = 0        // 連續判定逼近的輪數
     @Volatile private var bigGrowingAt = 0L        // 最近一次看到「大且持續放大」物體的時間（貼近推斷用）
+    @Volatile private var lastMonitorAt = 0L       // 監看畫面更新節流（3fps）
+    private var tone: ToneGenerator? = null        // 重用，避免每次警示重建音訊資源
 
     private const val PROCESS_INTERVAL_MS = 180L   // 偵測節奏 ~5fps（夠即時又省電）
     private const val TRACK_WINDOW_MS = 1500L      // 放大率的觀察窗
@@ -56,13 +58,14 @@ object CollisionGuard {
         return (0.3f / kotlin.math.tan(ang / 2f)).coerceIn(0.2f, 9.9f)
     }
 
-    private fun updateMonitor(src: Bitmap, boxes: List<MonBox>, danger: Boolean) {
+    private fun updateMonitor(src: Bitmap, ownSrc: Boolean, boxes: List<MonBox>, danger: Boolean) {
         if (!monitorOn) {
             if (monitorFrame.value != null) { monitorFrame.value = null; monitorInfo.value = emptyList() }
             return
         }
         try {
-            val out = src.copy(Bitmap.Config.ARGB_8888, true)
+            // 縮圖本來就是這輪自己配置的 → 直接在上面畫，省一次整張複製
+            val out = if (ownSrc) src else src.copy(Bitmap.Config.ARGB_8888, true)
             val cv = android.graphics.Canvas(out)
             val stroke = android.graphics.Paint().apply {
                 style = android.graphics.Paint.Style.STROKE; strokeWidth = out.width * 0.008f
@@ -112,16 +115,26 @@ object CollisionGuard {
         tracks.clear()
         confirmStreak = 0
         bigGrowingAt = 0L
+        try { tone?.release() } catch (_: Throwable) {}
+        tone = null
+        monitorFrame.value = null; monitorInfo.value = emptyList()
         // 鏡頭投影若沒在用鏡頭就順手關掉（省電）
         if (VoiceEngine.liveVision.value != "camera") CameraCapture.stop()
         GatewayState.log("前向警戒已停止")
     }
 
-    private fun onFrame(bmp: Bitmap) {
+    private fun onFrame(srcBmp: Bitmap) {
         val now = System.currentTimeMillis()
         if (!running || busy || now - lastProcess < PROCESS_INTERVAL_MS) return
         val d = detector ?: return
         busy = true; lastProcess = now
+        // 縮到寬 480 再偵測：ML Kit 快 3~5 倍，監看繪製也直接畫在這張縮圖上（不再整張複製）
+        val bmp = if (srcBmp.width > 480) {
+            val s = 480f / srcBmp.width
+            try { Bitmap.createScaledBitmap(srcBmp, 480, (srcBmp.height * s).toInt(), false) }
+            catch (_: Throwable) { srcBmp }
+        } else srcBmp
+        val ownBmp = bmp !== srcBmp // 縮圖是自己的記憶體 → 監看可直接在上面畫框
         try {
             d.process(InputImage.fromBitmap(bmp, 0))
                 .addOnSuccessListener { objs ->
@@ -185,7 +198,10 @@ object CollisionGuard {
                         biggest = 1f
                     }
                     tracks.keys.retainAll(seen) // 消失的物體清掉，避免記憶體累積
-                    if (monitorOn) updateMonitor(bmp, monBoxes, approaching)
+                    if (monitorOn && now - lastMonitorAt > 300) { // 監看畫面 3fps 就夠順
+                        lastMonitorAt = now
+                        updateMonitor(bmp, ownBmp, monBoxes, approaching)
+                    }
                     // 連續 CONFIRM_FRAMES 輪都判定逼近才真的警示（單幀抖動不叫）
                     if (approaching) {
                         confirmStreak++
@@ -202,7 +218,10 @@ object CollisionGuard {
         lastAlert = now
         val c = ctx ?: return
         // 全本地即時警示：嗶聲（鬧鈴音量）＋震動＋喊話
-        try { ToneGenerator(AudioManager.STREAM_ALARM, 100).startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 400) } catch (_: Throwable) {}
+        try {
+            (tone ?: ToneGenerator(AudioManager.STREAM_ALARM, 100).also { tone = it })
+                .startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 400)
+        } catch (_: Throwable) { tone = null }
         DeviceTools.vibrate(c, 500)
         DeviceTools.speak(c, "小心！前方物體逼近！")
         GatewayState.log("⚠️ 前向警戒：偵測到逼近物體（佔畫面 ${"%.0f".format(area * 100)}%）")
