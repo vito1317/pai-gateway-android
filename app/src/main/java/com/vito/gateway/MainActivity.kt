@@ -751,6 +751,39 @@ fun VoiceTab() {
                 Text(if (cam) "📷 鏡頭投影中（AI 正在看鏡頭）· 點此停止" else "📷 鏡頭投影給 AI 看", fontSize = 13.sp)
             }
         }
+        Spacer(Modifier.height(6.dp))
+        // 前向警戒：鏡頭本地物體偵測，逼近物毫秒級警示（不經雲端）；安全哨兵：撞擊/跌倒自動求援
+        run {
+            val guard = CollisionGuard.active.value
+            OutlinedButton(
+                onClick = {
+                    val p = Prefs(ctx)
+                    if (guard) { p.collisionGuard = false; CollisionGuard.stop() }
+                    else { p.collisionGuard = true; CollisionGuard.start(ctx) }
+                },
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (guard) Color(0xFF7C2D12) else Color.Transparent,
+                    contentColor = if (guard) Color(0xFFFDBA74) else CyberCyan
+                ),
+                border = BorderStroke(1.dp, if (guard) Color(0xFFF97316) else CyberCyan.copy(alpha = 0.5f))
+            ) {
+                Icon(Icons.Default.Warning, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (guard) "👁 前向警戒中（鏡頭朝前）· 點此停止" else "👁 前向警戒（逼近物即時警示）", fontSize = 13.sp)
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        run {
+            var impact by remember { mutableStateOf(Prefs(ctx).impactGuard) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🛡 安全哨兵（撞擊/跌倒自動確認求援）", color = CyberGray, fontSize = 12.sp)
+                Spacer(Modifier.width(6.dp))
+                Switch(checked = impact, onCheckedChange = {
+                    impact = it; Prefs(ctx).impactGuard = it
+                    if (it) ImpactSentinel.start(ctx) else ImpactSentinel.stop()
+                }, modifier = Modifier.scale(0.75f))
+            }
+        }
         Spacer(Modifier.height(8.dp))
 
         // 字幕區（佔剩餘空間、可上下滑；內容更新自動捲到最新）

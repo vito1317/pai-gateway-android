@@ -73,6 +73,12 @@ class GatewayService : Service() {
         // paigent 主動感知通道：裝置事件（電量低/儲存不足）推回平台 /webhooks/{node}
         Sentinel.start(this, prefs.paiBase, prefs.nodeName)
 
+        // 安全哨兵：加速度計撞擊/跌倒偵測（本地即時反應＋回報平台確認求援；開關在 Prefs）
+        ImpactSentinel.start(this)
+
+        // 前向警戒上次開著（App 重啟/開機自啟）→ 恢復
+        if (prefs.collisionGuard) CollisionGuard.start(this)
+
         // 解鎖手機 → 早晨通勤檢查（醒來即提醒，避免時間輪詢時你還沒醒沒看到）
         registerUnlockReceiver()
     }
@@ -114,6 +120,8 @@ class GatewayService : Service() {
         super.onDestroy()
         ReversePoller.stop()
         Sentinel.stop()
+        ImpactSentinel.stop()
+        CollisionGuard.stop()
         try { unlockReceiver?.let { unregisterReceiver(it) } } catch (e: Throwable) {}
         try { server?.stop() } catch (e: Throwable) {}
         try { wakeLock?.release() } catch (e: Throwable) {}

@@ -81,4 +81,6 @@ dependencies {
     implementation("androidx.camera:camera-core:1.3.4")
     implementation("androidx.camera:camera-camera2:1.3.4")
     implementation("androidx.camera:camera-lifecycle:1.3.4")
+    // 前向警戒：本地物體偵測（離線、含內建模型）
+    implementation("com.google.mlkit:object-detection:17.0.2")
 }

@@ -35,6 +35,16 @@ class Prefs(ctx: Context) {
         get() = sp.getString("lastPublicUrl", "") ?: ""
         set(v) = sp.edit().putString("lastPublicUrl", v).apply()
 
+    /** 安全哨兵：加速度計撞擊/跌倒偵測（本地即時反應＋回報平台確認求援）。 */
+    var impactGuard: Boolean
+        get() = sp.getBoolean("impactGuard", true)
+        set(v) = sp.edit().putBoolean("impactGuard", v).apply()
+
+    /** 前向警戒：鏡頭本地物體偵測，逼近物即時警示（不經雲端）。耗電，手動開。 */
+    var collisionGuard: Boolean
+        get() = sp.getBoolean("collisionGuard", false)
+        set(v) = sp.edit().putBoolean("collisionGuard", v).apply()
+
     /** 語音對話的穩定 session id：持久化 → 關 App 再開也接續同一段對話（長期記憶）。 */
     var voiceSession: String
         get() = sp.getString("voiceSession", null) ?: ("android-" + randomToken()).also { voiceSession = it }

@@ -24,6 +24,7 @@ object CameraCapture {
     private var appCtx: Context? = null
     private val exec = Executors.newSingleThreadExecutor()
     @Volatile var lensBack = true   // true=後鏡頭，false=前鏡頭
+    @Volatile var frameListener: ((Bitmap) -> Unit)? = null   // 每幀回呼（CollisionGuard 本地偵測用）
     @Volatile private var firstFrameLogged = false
     @Volatile private var frameErrLogged = false
 
@@ -52,7 +53,9 @@ object CameraCapture {
                         analysis.setAnalyzer(exec) { img ->
                             try {
                                 val bmp = img.toBitmap()
-                                latest = rotate(bmp, img.imageInfo.rotationDegrees)
+                                val rotated = rotate(bmp, img.imageInfo.rotationDegrees)
+                                latest = rotated
+                                try { frameListener?.invoke(rotated) } catch (_: Throwable) {}
                                 if (! firstFrameLogged) { firstFrameLogged = true; GatewayState.log("📷 鏡頭已取得畫面 ${bmp.width}x${bmp.height}") }
                             } catch (e: Throwable) {
                                 if (! frameErrLogged) { frameErrLogged = true; GatewayState.log("鏡頭取幀失敗：${e.message}") }
