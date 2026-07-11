@@ -97,13 +97,24 @@ fun AgentOpsSection() {
         val (stLabel, stColor) = opsStatusLabel(a.optString("status"))
         Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(CyberSurface).padding(12.dp)) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(when (kind) { "watch" -> "👁 "; "call" -> "📞 "; else -> "🧠 " }, fontSize = 14.sp)
+                Text(when (kind) { "watch" -> "👁 "; "call" -> "📞 "; "chat" -> "💬 "; else -> "🧠 " }, fontSize = 14.sp)
                 Text(a.optString("name"), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                 Text("● $stLabel", color = stColor, fontSize = 11.sp)
             }
             Text(a.optString("title"), color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, modifier = Modifier.padding(top = 3.dp))
 
             when (kind) {
+                // 對話中的 agent（網頁/語音/TG/LINE/通勤/自動化/主動思考）：即時步驟說明
+                "chat" -> {
+                    val steps = a.optJSONArray("steps") ?: JSONArray()
+                    val lastN = (maxOf(0, steps.length() - 3) until steps.length()).map { steps.getJSONObject(it).optString("text") }
+                    for ((idx, t) in lastN.withIndex()) {
+                        Text("» $t", color = if (idx == lastN.size - 1) Color.White else CyberGray,
+                            fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+                    }
+                    if (a.has("elapsed") && !a.isNull("elapsed"))
+                        Text("已跑 ${a.optInt("elapsed")}s", color = CyberGray, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+                }
                 // 協調者：步驟鏈（分類標籤）＋ 當前動作的想法/觀察
                 "coordinator" -> {
                     val steps = a.optJSONArray("steps") ?: JSONArray()

@@ -79,6 +79,9 @@ class GatewayService : Service() {
         // 前向警戒上次開著（App 重啟/開機自啟）→ 恢復
         if (prefs.collisionGuard) CollisionGuard.start(this)
 
+        // 健康守護：Health Connect 心率異常提醒（需已授權；開關在語音頁）
+        if (prefs.healthGuard) HealthSentinel.start(this)
+
         // 解鎖手機 → 早晨通勤檢查（醒來即提醒，避免時間輪詢時你還沒醒沒看到）
         registerUnlockReceiver()
     }
@@ -122,6 +125,7 @@ class GatewayService : Service() {
         Sentinel.stop()
         ImpactSentinel.stop()
         CollisionGuard.stop()
+        HealthSentinel.stop()
         try { unlockReceiver?.let { unregisterReceiver(it) } } catch (e: Throwable) {}
         try { server?.stop() } catch (e: Throwable) {}
         try { wakeLock?.release() } catch (e: Throwable) {}

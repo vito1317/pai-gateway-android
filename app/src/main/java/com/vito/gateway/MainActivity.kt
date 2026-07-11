@@ -784,6 +784,29 @@ fun VoiceTab() {
                 }, modifier = Modifier.scale(0.75f))
             }
         }
+        run {
+            var health by remember { mutableStateOf(Prefs(ctx).healthGuard) }
+            val healthPerms = rememberLauncherForActivityResult(
+                androidx.health.connect.client.PermissionController.createRequestPermissionResultContract()
+            ) { granted ->
+                if (granted.containsAll(HealthSentinel.PERMS)) {
+                    Prefs(ctx).healthGuard = true; health = true; HealthSentinel.start(ctx)
+                } else {
+                    health = false; Prefs(ctx).healthGuard = false
+                    GatewayState.log("健康守護：權限未完整授權（心率/睡眠/步數）")
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("❤️ 健康守護（手錶心率異常提醒）", color = CyberGray, fontSize = 12.sp)
+                Spacer(Modifier.width(6.dp))
+                Switch(checked = health, onCheckedChange = {
+                    if (it) {
+                        try { healthPerms.launch(HealthSentinel.PERMS) }
+                        catch (e: Throwable) { GatewayState.log("健康守護：無法開啟授權（${e.message}）") }
+                    } else { health = false; Prefs(ctx).healthGuard = false; HealthSentinel.stop() }
+                }, modifier = Modifier.scale(0.75f))
+            }
+        }
         Spacer(Modifier.height(8.dp))
 
         // 字幕區（佔剩餘空間、可上下滑；內容更新自動捲到最新）
