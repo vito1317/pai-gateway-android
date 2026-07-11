@@ -84,5 +84,6 @@ dependencies {
     // 前向警戒：本地物體偵測（離線、含內建模型）
     implementation("com.google.mlkit:object-detection:17.0.2")
     // 健康守護：Health Connect 讀心率/睡眠/步數（Pixel Watch/Fitbit/Samsung Health 都寫進這）
-    implementation("androidx.health.connect:connect-client:1.1.0")
+    // 注意版本：1.1.0 正式版要求 compileSdk 36 + AGP 8.9（本專案 34/8.5）→ 用 alpha07（需求 34，API 夠用）
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
 }

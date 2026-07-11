@@ -33,10 +33,13 @@ object HealthSentinel {
 
     private const val CHECK_MS = 10 * 60_000L
     private const val WINDOW_MIN = 15L
-    private const val HR_HIGH = 110.0
-    private const val HR_LOW = 40.0
     private const val EXERCISE_STEPS = 40L     // 窗內步數 ≥ 此值視為運動中，不判高心率
     private const val THROTTLE_MS = 60 * 60_000L
+
+    // 門檻由平台設定同步（/api/sensor/config），改設定頁或叫 AI 改都會在下一輪生效
+    @Volatile private var hrHigh = 110.0
+    @Volatile private var hrLow = 40.0
+    @Volatile private var serverEnabled = true
 
     @Volatile private var running = false
     private var ctx: Context? = null
@@ -64,8 +67,28 @@ object HealthSentinel {
         GatewayState.log("健康守護已停止")
     }
 
+    /** 從平台同步門檻設定（失敗就沿用上次值）。 */
+    private fun syncConfig(c: Context) {
+        try {
+            val p = Prefs(c)
+            if (p.registerToken.isBlank()) return
+            val conn = (java.net.URL(p.paiBase.trimEnd('/') + "/api/sensor/config").openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "GET"; connectTimeout = 8000; readTimeout = 10000
+                setRequestProperty("X-Register-Secret", p.registerToken)
+            }
+            if (conn.responseCode in 200..299) {
+                val j = org.json.JSONObject(conn.inputStream.bufferedReader().readText())
+                hrHigh = j.optDouble("hr_high", hrHigh)
+                hrLow = j.optDouble("hr_low", hrLow)
+                serverEnabled = j.optBoolean("enabled", true)
+            }
+        } catch (_: Throwable) {}
+    }
+
     private fun poll() {
         val c = ctx ?: return
+        syncConfig(c)
+        if (!serverEnabled) return
         val client = try { HealthConnectClient.getOrCreate(c) } catch (e: Throwable) {
             if (!permWarned) { permWarned = true; GatewayState.log("健康守護：此裝置沒有 Health Connect（${e.message}）") }
             return
@@ -92,10 +115,10 @@ object HealthSentinel {
             } catch (_: Throwable) { 0L }
         }
 
-        gauge("heart_rate_high", avg >= HR_HIGH && steps < EXERCISE_STEPS, avg,
-            "靜息心率偏高：近 ${WINDOW_MIN} 分鐘平均 ${avg.toInt()} bpm（幾乎沒有活動）")
-        gauge("heart_rate_low", avg <= HR_LOW, avg,
-            "心率偏低：近 ${WINDOW_MIN} 分鐘平均 ${avg.toInt()} bpm")
+        gauge("heart_rate_high", avg >= hrHigh && steps < EXERCISE_STEPS, avg,
+            "靜息心率偏高：近 ${WINDOW_MIN} 分鐘平均 ${avg.toInt()} bpm（幾乎沒有活動，警戒值 ${hrHigh.toInt()}）")
+        gauge("heart_rate_low", avg <= hrLow, avg,
+            "心率偏低：近 ${WINDOW_MIN} 分鐘平均 ${avg.toInt()} bpm（警戒值 ${hrLow.toInt()}）")
     }
 
     /** 遲滯＋節流：跨入異常只報一次，恢復正常後才能再觸發。 */
