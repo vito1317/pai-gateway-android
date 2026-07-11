@@ -16,10 +16,140 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+
+/* ---------- Agent Ops：每個運行中 agent 目前在幹嘛（打 /api/agent-ops，3 秒輪詢） ---------- */
+
+private val OpsGreen = Color(0xFF3FDC97)
+private val OpsAmber = Color(0xFFE6B450)
+
+/** action 名稱 → (中文動作, 顏色)，與 web 端 AgentOpsFlow 同一套分類。 */
+private fun categoryOf(action: String): Pair<String, Color> {
+    val a = action.lowercase()
+    return when {
+        Regex("browse|web|url|http|fetch|crawl|surf|page").containsMatchIn(a) -> "瀏覽網頁" to CyberCyan
+        Regex("gui|tap|click|swipe|screenshot|screen_|type|keyboard|open_app|adb|device|android|mobile|control").containsMatchIn(a) -> "操作裝置" to OpsGreen
+        Regex("recall|memory|remember").containsMatchIn(a) -> "記憶檢索" to CyberCyan
+        Regex("""\b(call|dial|twilio|outbound)""").containsMatchIn(a) -> "撥打電話" to OpsAmber
+        Regex("watch|vision|look|see|observe_screen|image").containsMatchIn(a) -> "視覺判讀" to CyberCyan
+        Regex("notify|message|mail|send|telegram|line|slack|discord").containsMatchIn(a) -> "發送訊息" to OpsGreen
+        Regex("log|read_|file|repo").containsMatchIn(a) -> "讀取資料" to CyberGray
+        Regex("query|lookup|match|search|list").containsMatchIn(a) -> "查詢比對" to CyberCyan
+        Regex("propose|record_finding|plan|ticket").containsMatchIn(a) -> "規劃提案" to OpsAmber
+        Regex("handoff").containsMatchIn(a) -> "移交領域" to OpsAmber
+        Regex("finish|reflect|summar").containsMatchIn(a) -> "收尾反思" to OpsGreen
+        else -> "工具呼叫" to CyberGray
+    }
+}
+
+private fun opsStatusLabel(s: String): Pair<String, Color> = when (s) {
+    "running" -> "執行中" to OpsGreen
+    "awaiting_hitl" -> "待核准" to OpsAmber
+    "active" -> "守望中" to CyberCyan
+    "pending" -> "撥號中" to OpsAmber
+    "in_progress" -> "通話中" to OpsGreen
+    else -> s to CyberGray
+}
+
+/** 即時作業流：顯示每個運行中 agent（協調者/視覺守望/外撥電話）與當前動作細節。 */
+@Composable
+fun AgentOpsSection() {
+    val ctx = LocalContext.current
+    var agents by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var loaded by remember { mutableStateOf(false) }
+
+    // 分頁顯示期間每 3 秒輪詢；離開分頁（LaunchedEffect 取消）就停
+    LaunchedEffect(Unit) {
+        while (true) {
+            Thread {
+                try {
+                    val prefs = Prefs(ctx)
+                    val c = (URL(prefs.paiBase.trimEnd('/') + "/api/agent-ops").openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"; connectTimeout = 8000; readTimeout = 15000
+                        setRequestProperty("Accept", "application/json")
+                        setRequestProperty("X-Register-Secret", prefs.registerToken)
+                    }
+                    val raw = (if (c.responseCode in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.readText().orEmpty()
+                    val arr = JSONObject(raw).optJSONArray("agents") ?: JSONArray()
+                    agents = (0 until arr.length()).map { arr.getJSONObject(it) }
+                    loaded = true
+                } catch (_: Throwable) { /* 斷線時保留舊畫面 */ }
+            }.start()
+            delay(3000)
+        }
+    }
+
+    Text("⚡ 即時作業流 · Agent 在幹嘛", color = CyberCyan, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 4.dp, bottom = 6.dp))
+
+    if (agents.isEmpty()) {
+        Text(if (loaded) "沒有運行中的 agent。交辦任務、開視覺守望、或叫 AI 打電話就會顯示在這。" else "掃描中…",
+            color = CyberGray, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+        return
+    }
+
+    for (a in agents) {
+        val kind = a.optString("kind")
+        val (stLabel, stColor) = opsStatusLabel(a.optString("status"))
+        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(CyberSurface).padding(12.dp)) {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(when (kind) { "watch" -> "👁 "; "call" -> "📞 "; else -> "🧠 " }, fontSize = 14.sp)
+                Text(a.optString("name"), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text("● $stLabel", color = stColor, fontSize = 11.sp)
+            }
+            Text(a.optString("title"), color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, modifier = Modifier.padding(top = 3.dp))
+
+            when (kind) {
+                // 協調者：步驟鏈（分類標籤）＋ 當前動作的想法/觀察
+                "coordinator" -> {
+                    val steps = a.optJSONArray("steps") ?: JSONArray()
+                    if (steps.length() > 0) {
+                        val chain = (0 until steps.length()).joinToString(" ▸ ") { i ->
+                            categoryOf(steps.getJSONObject(i).optString("action")).first
+                        }
+                        Text(chain, color = CyberGray, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                        val cur = steps.getJSONObject(steps.length() - 1)
+                        val (catLabel, catColor) = categoryOf(cur.optString("action"))
+                        Text("▶ $catLabel · ${cur.optString("action")}", color = catColor, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                        cur.optString("thought").takeIf { it.isNotEmpty() && it != "null" }?.let {
+                            Text("💭 $it", color = CyberGray, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+                        }
+                        cur.optString("observation").takeIf { it.isNotEmpty() && it != "null" }?.let {
+                            Text("👁 $it", color = OpsGreen.copy(alpha = 0.85f), fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+                        }
+                    }
+                    val meta = buildList {
+                        a.optString("domain").takeIf { it.isNotEmpty() }?.let { add("領域 $it") }
+                        if (a.optInt("tokens") > 0) add("${a.optInt("tokens")} tok")
+                        if (a.has("elapsed") && !a.isNull("elapsed")) add("已跑 ${a.optInt("elapsed")}s")
+                    }.joinToString(" · ")
+                    if (meta.isNotEmpty()) Text(meta, color = CyberGray, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+                // 視覺守望：掃描頻率/次數 ＋ AI 目前看到的畫面
+                "watch" -> {
+                    Text("每 ${a.optInt("interval")}s 截圖判讀 · 已掃 ${a.optInt("runs")} 次" +
+                        (a.optString("node").takeIf { it.isNotEmpty() && it != "null" }?.let { " · 節點 $it" } ?: ""),
+                        color = CyberGray, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    a.optString("detail").takeIf { it.isNotEmpty() && it != "null" }?.let {
+                        Text("👁 目前畫面：$it", color = OpsGreen.copy(alpha = 0.85f), fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+                    }
+                }
+                // 外撥電話：對象/回合 ＋ 最後一句
+                "call" -> {
+                    Text("→ ${a.optString("to")} · ${a.optInt("turns")} 回合", color = CyberGray, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    a.optString("lastLine").takeIf { it.isNotEmpty() && it != "null" }?.let {
+                        Text("💬 $it", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+                    }
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+}
 
 /** 自動化流程 + AI 主動思考記錄（手機端；打 /api/automations）。 */
 @Composable
@@ -88,6 +218,9 @@ fun AutomationsTab() {
     Column(Modifier.fillMaxSize().background(CyberBackground).verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("🤖 自動化 · AI 主動思考", color = CyberCyan, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         if (status.isNotEmpty()) Text(status, color = CyberGray, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+
+        Spacer(Modifier.height(12.dp))
+        AgentOpsSection()
 
         Text("內建功能（可開關）", color = CyberGray, fontSize = 12.sp, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
         for (b in builtins) {
