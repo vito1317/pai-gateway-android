@@ -42,6 +42,49 @@ object CollisionGuard {
 
     val active = mutableStateOf(false)   // UI 狀態
 
+    // ── 距離監看畫面（UI 開著才更新，5fps）────────────────────────────────
+    @Volatile var monitorOn = false
+    val monitorFrame = mutableStateOf<Bitmap?>(null)          // 已畫上物體框+距離標籤的畫面
+    val monitorInfo = mutableStateOf<List<String>>(emptyList()) // 每個物體一行文字說明
+    val monitorDanger = mutableStateOf(false)
+
+    private data class MonBox(val rect: android.graphics.Rect, val meters: Float, val area: Float, val danger: Boolean)
+
+    /** 單眼距離估算：物體角寬 = 邊框寬比例 × 水平視角(≈70°)，假設實體寬約 60cm → d=(W/2)/tan(θ/2)。 */
+    private fun estMeters(wFrac: Float): Float {
+        val ang = wFrac.coerceIn(0.02f, 1f) * 1.22f
+        return (0.3f / kotlin.math.tan(ang / 2f)).coerceIn(0.2f, 9.9f)
+    }
+
+    private fun updateMonitor(src: Bitmap, boxes: List<MonBox>, danger: Boolean) {
+        if (!monitorOn) {
+            if (monitorFrame.value != null) { monitorFrame.value = null; monitorInfo.value = emptyList() }
+            return
+        }
+        try {
+            val out = src.copy(Bitmap.Config.ARGB_8888, true)
+            val cv = android.graphics.Canvas(out)
+            val stroke = android.graphics.Paint().apply {
+                style = android.graphics.Paint.Style.STROKE; strokeWidth = out.width * 0.008f
+            }
+            val label = android.graphics.Paint().apply {
+                style = android.graphics.Paint.Style.FILL; textSize = out.width * 0.05f; isFakeBoldText = true
+            }
+            for (b in boxes) {
+                val color = if (b.danger) 0xFFFF5252.toInt() else 0xFF4CFF9A.toInt()
+                stroke.color = color; label.color = color
+                cv.drawRect(b.rect, stroke)
+                cv.drawText("約${"%.1f".format(b.meters)}m", b.rect.left.toFloat(), (b.rect.top - 12).coerceAtLeast(40).toFloat(), label)
+            }
+            monitorFrame.value = out
+            val lines = boxes.mapIndexed { i, b ->
+                "物體${i + 1}：約 ${"%.1f".format(b.meters)} m ・ 佔畫面 ${(b.area * 100).toInt()}%" + (if (b.danger) " ・ ⚠️ 逼近中" else "")
+            }
+            monitorInfo.value = if (danger && boxes.isEmpty()) listOf("⚠️ 物體已貼近（塞滿畫面，偵測器看不到邊界）") else lines
+            monitorDanger.value = danger
+        } catch (_: Throwable) {}
+    }
+
     fun start(context: Context) {
         if (running) return
         val app = context.applicationContext
@@ -88,6 +131,7 @@ object CollisionGuard {
                     var biggest = 0f
                     var anyOnPath = false
                     val seen = HashSet<Int>()
+                    val monBoxes = ArrayList<MonBox>()
                     for (o in objs) {
                         val id = o.trackingId ?: continue
                         seen.add(id)
@@ -100,29 +144,39 @@ object CollisionGuard {
                         val h = tracks.getOrPut(id) { ArrayDeque() }
                         h.addLast(now to area)
                         while (h.isNotEmpty() && now - h.first().first > TRACK_WINDOW_MS) h.removeFirst()
-                        if (!onPath || h.size < 3) continue
-                        // 有逼近史的大物件（曾比現在小 20%+，非一開鏡頭就大）
-                        val minPast = h.minOf { it.second }
-                        val grewInto = minPast > 0f && area / minPast >= 1.2f
-                        if (area >= 0.18f && h.last().second > h.elementAt(h.size - 2).second && grewInto) {
-                            bigGrowingAt = now // 大且還在放大 → 記下時間（等等消失就是貼近）
+                        var objDanger = false
+                        if (onPath && h.size >= 3) {
+                            // 有逼近史的大物件（曾比現在小 20%+，非一開鏡頭就大）
+                            val minPast = h.minOf { it.second }
+                            val grewInto = minPast > 0f && area / minPast >= 1.2f
+                            if (area >= 0.18f && h.last().second > h.elementAt(h.size - 2).second && grewInto) {
+                                bigGrowingAt = now // 大且還在放大 → 記下時間（等等消失就是貼近）
+                            }
+                            if (area >= MIN_AREA && h.size >= 4) {
+                                if (area >= 0.30f && grewInto) {
+                                    objDanger = true // ① 已經很近且是逼近而來
+                                } else {
+                                    // ② 中距離：必須「持續」放大（窗內 ≥70% 相鄰樣本變大，濾掉手晃）且 TTC 過短
+                                    var inc = 0; var cmp = 0
+                                    var prev = -1f
+                                    for ((_, a) in h) { if (prev >= 0f) { cmp++; if (a > prev) inc++ }; prev = a }
+                                    if (cmp > 0 && inc.toFloat() / cmp >= 0.7f) {
+                                        val (t0, a0) = h.first()
+                                        val dt = (now - t0) / 1000f
+                                        if (dt >= 0.5f && a0 > 0.004f) {
+                                            val growth = area / a0
+                                            if (growth >= GROWTH_MIN) {
+                                                val ttc = dt / (sqrt(growth) - 1f)  // 面積 ∝ 1/距離² → 由放大率估 TTC
+                                                if (ttc in 0f..TTC_ALERT_S) objDanger = true
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        if (area < MIN_AREA || h.size < 4) continue
-                        // ① 已經很近且是逼近而來 → 警示
-                        if (area >= 0.30f && grewInto) { approaching = true; continue }
-                        // ② 中距離：必須「持續」放大（窗內 ≥70% 相鄰樣本變大，濾掉手晃）且 TTC 過短
-                        var inc = 0; var cmp = 0
-                        var prev = -1f
-                        for ((_, a) in h) { if (prev >= 0f) { cmp++; if (a > prev) inc++ }; prev = a }
-                        if (cmp == 0 || inc.toFloat() / cmp < 0.7f) continue
-                        val (t0, a0) = h.first()
-                        val dt = (now - t0) / 1000f
-                        if (dt < 0.5f || a0 <= 0.004f) continue
-                        val growth = area / a0
-                        if (growth >= GROWTH_MIN) {
-                            val ttc = dt / (sqrt(growth) - 1f)  // 面積 ∝ 1/距離² → 由放大率估 TTC
-                            if (ttc in 0f..TTC_ALERT_S) approaching = true
-                        }
+                        if (objDanger) approaching = true
+                        if (monitorOn) monBoxes.add(MonBox(android.graphics.Rect(o.boundingBox),
+                            estMeters(o.boundingBox.width().toFloat() / bmp.width), area, objDanger))
                     }
                     // ③ 貼近推斷：剛剛還有「大且持續放大」的物體，現在正前方偵測整個消失
                     //   ＝它塞滿畫面被偵測器丟失（很近時偵測器看不到邊界）→ 這正是最危險的時刻
@@ -131,6 +185,7 @@ object CollisionGuard {
                         biggest = 1f
                     }
                     tracks.keys.retainAll(seen) // 消失的物體清掉，避免記憶體累積
+                    if (monitorOn) updateMonitor(bmp, monBoxes, approaching)
                     // 連續 CONFIRM_FRAMES 輪都判定逼近才真的警示（單幀抖動不叫）
                     if (approaching) {
                         confirmStreak++

@@ -12,6 +12,11 @@ import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -770,6 +775,53 @@ fun VoiceTab() {
                 Icon(Icons.Default.Warning, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(if (guard) "👁 前向警戒中（鏡頭朝前）· 點此停止" else "👁 前向警戒（逼近物即時警示）", fontSize = 13.sp)
+            }
+            // 距離監看畫面：即時鏡頭 + 物體框 + 估算距離
+            if (guard) {
+                var showMon by remember { mutableStateOf(false) }
+                TextButton(onClick = { showMon = true; CollisionGuard.monitorOn = true }) {
+                    Text("📏 顯示距離畫面", color = CyberCyan, fontSize = 12.sp)
+                }
+                if (showMon) {
+                    Dialog(
+                        onDismissRequest = { showMon = false; CollisionGuard.monitorOn = false },
+                        properties = DialogProperties(usePlatformDefaultWidth = false)
+                    ) {
+                        val danger = CollisionGuard.monitorDanger.value
+                        Column(Modifier.fillMaxSize().background(Color.Black).padding(14.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("📏 前向警戒・距離監看", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                TextButton(onClick = { showMon = false; CollisionGuard.monitorOn = false }) {
+                                    Text("關閉", color = CyberGray)
+                                }
+                            }
+                            val f = CollisionGuard.monitorFrame.value
+                            if (f != null) {
+                                Image(
+                                    bitmap = f.asImageBitmap(), contentDescription = null,
+                                    modifier = Modifier.fillMaxWidth().weight(1f),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                                    Text("等待鏡頭畫面…", color = CyberGray)
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                if (danger) "🔴 危險：前方物體逼近中" else "🟢 前方安全",
+                                color = if (danger) Color(0xFFFF5252) else Color(0xFF4CFF9A),
+                                fontSize = 18.sp, fontWeight = FontWeight.Bold
+                            )
+                            CollisionGuard.monitorInfo.value.forEach {
+                                Text(it, color = CyberGray, fontSize = 12.sp)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text("＊距離為單眼視覺估算（假設物體實寬約 60cm），僅供參考，勿作安全依據",
+                                color = CyberGray.copy(alpha = 0.7f), fontSize = 10.sp)
+                        }
+                    }
+                }
             }
         }
         Spacer(Modifier.height(4.dp))
