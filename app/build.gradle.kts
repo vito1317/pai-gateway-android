@@ -86,4 +86,7 @@ dependencies {
     // 健康守護：Health Connect 讀心率/睡眠/步數（Pixel Watch/Fitbit/Samsung Health 都寫進這）
     // 注意版本：1.1.0 正式版要求 compileSdk 36 + AGP 8.9（本專案 34/8.5）→ 用 alpha07（需求 34，API 夠用）
     implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
+    // connect-client 傳遞依賴會把 guava 的 ListenableFuture 換成空 stub（9999-empty），
+    // 導致 CameraX 的 ListenableFuture 編譯失敗 → 明確引入完整 guava-android 提供該類別
+    implementation("com.google.guava:guava:33.2.1-android")
 }
