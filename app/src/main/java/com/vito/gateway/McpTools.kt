@@ -46,6 +46,8 @@ object McpTools {
         tool("set_volume", "設定手機媒體音量（0-100）。", JSONObject().put("percent", n("百分比")), JSONArray().put("percent"))
         tool("set_brightness", "設定手機螢幕亮度（0-100，首次需授權修改系統設定）。", JSONObject().put("percent", n("百分比")), JSONArray().put("percent"))
         tool("vibrate", "讓手機震動。", JSONObject().put("ms", n("毫秒，預設500")))
+        tool("collision_guard", "開/關「前向警戒」：鏡頭本地偵測逼近物體，快撞到時手機即時嗶聲+震動+喊話警示（完全離線）。使用者說「開啟/關閉前向警戒、幫我盯著前面」時用。",
+            JSONObject().put("on", b("true=開啟，false=關閉")), JSONArray().put("on"))
         tool("battery_status", "查手機電量與充電狀態。", JSONObject())
         tool("open_app", "開啟手機上的 app（LINE/YouTube/地圖/Chrome/Spotify/設定/相機…，會查實際安裝的 App 模糊比對名稱）。", JSONObject().put("name", s("app 名稱")), JSONArray().put("name"))
         tool("list_apps", "列出手機已安裝、可開啟的 App（顯示名稱＋套件名）。不確定某 App 在不在、或要給使用者選時用。", JSONObject())
@@ -121,6 +123,22 @@ object McpTools {
             "set_volume" -> DeviceTools.setVolume(ctx, args.optInt("percent"))
             "set_brightness" -> DeviceTools.setBrightness(ctx, args.optInt("percent"))
             "vibrate" -> DeviceTools.vibrate(ctx, args.optLong("ms", 500))
+            "collision_guard" -> {
+                val on = args.optBoolean("on")
+                Prefs(ctx).collisionGuard = on
+                if (on) {
+                    if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.CAMERA)
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        "沒有相機權限，開不了前向警戒。請開啟 App → 設定 → 權限 → 相機"
+                    } else {
+                        CollisionGuard.start(ctx)
+                        "前向警戒已開啟（鏡頭本地偵測），請把手機鏡頭朝向前方"
+                    }
+                } else {
+                    CollisionGuard.stop()
+                    "前向警戒已關閉"
+                }
+            }
             "battery_status" -> DeviceTools.battery(ctx)
             "open_app" -> DeviceTools.openApp(ctx, args.optString("name"))
             "list_apps" -> DeviceTools.listApps(ctx)

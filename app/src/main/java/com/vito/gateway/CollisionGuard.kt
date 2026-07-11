@@ -28,14 +28,16 @@ object CollisionGuard {
     @Volatile private var lastAlert = 0L
     @Volatile private var lastReport = 0L
     private val tracks = HashMap<Int, ArrayDeque<Pair<Long, Float>>>() // trackingId → (時間, 面積比) 歷史
+    @Volatile private var confirmStreak = 0        // 連續判定逼近的輪數
+    @Volatile private var bigGrowingAt = 0L        // 最近一次看到「大且持續放大」物體的時間（貼近推斷用）
 
     private const val PROCESS_INTERVAL_MS = 180L   // 偵測節奏 ~5fps（夠即時又省電）
-    private const val TRACK_WINDOW_MS = 1200L      // 放大率的觀察窗
-    private const val MIN_AREA = 0.06f             // 物體至少佔畫面 6% 才評估（太遠不管）
-    private const val NEAR_AREA = 0.22f            // 佔畫面 22%＝已經很近，直接警示
-    private const val GROWTH_MIN = 1.15f           // 窗內面積至少放大 15% 才算逼近
-    private const val TTC_ALERT_S = 1.6f           // 預估碰撞時間低於 1.6 秒 → 警示
-    private const val ALERT_COOLDOWN_MS = 4000L
+    private const val TRACK_WINDOW_MS = 1500L      // 放大率的觀察窗
+    private const val MIN_AREA = 0.08f             // 物體至少佔畫面 8% 才評估（太遠不管）
+    private const val GROWTH_MIN = 1.35f           // 窗內面積至少放大 35% 才算逼近（1.15 會被手晃誤觸）
+    private const val TTC_ALERT_S = 1.2f           // 預估碰撞時間低於 1.2 秒 → 警示
+    private const val CONFIRM_FRAMES = 2           // 連續 N 輪都判定逼近才警示（濾掉單幀抖動）
+    private const val ALERT_COOLDOWN_MS = 8000L
     private const val REPORT_THROTTLE_MS = 60_000L
 
     val active = mutableStateOf(false)   // UI 狀態
@@ -65,6 +67,8 @@ object CollisionGuard {
         try { detector?.close() } catch (_: Throwable) {}
         detector = null
         tracks.clear()
+        confirmStreak = 0
+        bigGrowingAt = 0L
         // 鏡頭投影若沒在用鏡頭就順手關掉（省電）
         if (VoiceEngine.liveVision.value != "camera") CameraCapture.stop()
         GatewayState.log("前向警戒已停止")
@@ -80,30 +84,58 @@ object CollisionGuard {
                 .addOnSuccessListener { objs ->
                     if (!running) return@addOnSuccessListener
                     val frameArea = (bmp.width * bmp.height).toFloat()
-                    var alert = false
+                    var approaching = false
                     var biggest = 0f
+                    var anyOnPath = false
                     val seen = HashSet<Int>()
                     for (o in objs) {
                         val id = o.trackingId ?: continue
                         seen.add(id)
                         val area = o.boundingBox.width().toFloat() * o.boundingBox.height().toFloat() / frameArea
+                        // 只管「正前方路徑上」的物體：邊框中心在畫面中間帶（左右 20%~80%）
+                        val cx = o.boundingBox.exactCenterX() / bmp.width
+                        val onPath = cx in 0.2f..0.8f
+                        if (onPath) anyOnPath = true
                         if (area > biggest) biggest = area
                         val h = tracks.getOrPut(id) { ArrayDeque() }
                         h.addLast(now to area)
                         while (h.isNotEmpty() && now - h.first().first > TRACK_WINDOW_MS) h.removeFirst()
-                        if (area < MIN_AREA || h.size < 3) continue
-                        if (area >= NEAR_AREA) { alert = true; continue }
+                        if (!onPath || h.size < 3) continue
+                        // 有逼近史的大物件（曾比現在小 20%+，非一開鏡頭就大）
+                        val minPast = h.minOf { it.second }
+                        val grewInto = minPast > 0f && area / minPast >= 1.2f
+                        if (area >= 0.18f && h.last().second > h.elementAt(h.size - 2).second && grewInto) {
+                            bigGrowingAt = now // 大且還在放大 → 記下時間（等等消失就是貼近）
+                        }
+                        if (area < MIN_AREA || h.size < 4) continue
+                        // ① 已經很近且是逼近而來 → 警示
+                        if (area >= 0.30f && grewInto) { approaching = true; continue }
+                        // ② 中距離：必須「持續」放大（窗內 ≥70% 相鄰樣本變大，濾掉手晃）且 TTC 過短
+                        var inc = 0; var cmp = 0
+                        var prev = -1f
+                        for ((_, a) in h) { if (prev >= 0f) { cmp++; if (a > prev) inc++ }; prev = a }
+                        if (cmp == 0 || inc.toFloat() / cmp < 0.7f) continue
                         val (t0, a0) = h.first()
                         val dt = (now - t0) / 1000f
-                        if (dt < 0.4f || a0 <= 0.004f) continue
+                        if (dt < 0.5f || a0 <= 0.004f) continue
                         val growth = area / a0
                         if (growth >= GROWTH_MIN) {
                             val ttc = dt / (sqrt(growth) - 1f)  // 面積 ∝ 1/距離² → 由放大率估 TTC
-                            if (ttc in 0f..TTC_ALERT_S) alert = true
+                            if (ttc in 0f..TTC_ALERT_S) approaching = true
                         }
                     }
+                    // ③ 貼近推斷：剛剛還有「大且持續放大」的物體，現在正前方偵測整個消失
+                    //   ＝它塞滿畫面被偵測器丟失（很近時偵測器看不到邊界）→ 這正是最危險的時刻
+                    if (!anyOnPath && bigGrowingAt > 0L && now - bigGrowingAt < 1500L) {
+                        approaching = true
+                        biggest = 1f
+                    }
                     tracks.keys.retainAll(seen) // 消失的物體清掉，避免記憶體累積
-                    if (alert) fireAlert(biggest)
+                    // 連續 CONFIRM_FRAMES 輪都判定逼近才真的警示（單幀抖動不叫）
+                    if (approaching) {
+                        confirmStreak++
+                        if (confirmStreak >= CONFIRM_FRAMES) fireAlert(biggest)
+                    } else confirmStreak = 0
                 }
                 .addOnCompleteListener { busy = false }
         } catch (_: Throwable) { busy = false }
