@@ -859,6 +859,22 @@ fun VoiceTab() {
                 }, modifier = Modifier.scale(0.75f))
             }
         }
+        run {
+            var triage by remember { mutableStateOf(Prefs(ctx).notifyTriage) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🔕 通知分流（重要才吵我，其餘摘要/靜音）", color = CyberGray, fontSize = 12.sp)
+                Spacer(Modifier.width(6.dp))
+                Switch(checked = triage, onCheckedChange = {
+                    if (it && !NotificationListener.isEnabled(ctx)) {
+                        GatewayState.log("通知分流：請先在系統設定開啟「通知存取」權限")
+                        NotificationListener.openSettings(ctx)
+                    } else {
+                        triage = it; Prefs(ctx).notifyTriage = it
+                        GatewayState.log(if (it) "🔕 通知分流已開啟" else "通知分流已關閉")
+                    }
+                }, modifier = Modifier.scale(0.75f))
+            }
+        }
         Spacer(Modifier.height(8.dp))
 
         // 字幕區（佔剩餘空間、可上下滑；內容更新自動捲到最新）

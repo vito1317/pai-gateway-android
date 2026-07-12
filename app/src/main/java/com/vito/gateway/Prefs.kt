@@ -45,6 +45,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("collisionGuard", false)
         set(v) = sp.edit().putBoolean("collisionGuard", v).apply()
 
+    /** 通知分流：轉送 App 通知給 PAI 分級（重要才吵、一般每小時摘要、廣告靜音）。 */
+    var notifyTriage: Boolean
+        get() = sp.getBoolean("notifyTriage", false)
+        set(v) = sp.edit().putBoolean("notifyTriage", v).apply()
+
     /** 健康守護：Health Connect 心率異常提醒（開啟時會先走系統授權）。 */
     var healthGuard: Boolean
         get() = sp.getBoolean("healthGuard", false)

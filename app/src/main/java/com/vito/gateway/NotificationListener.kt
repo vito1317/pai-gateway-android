@@ -65,6 +65,21 @@ class NotificationListener : NotificationListenerService() {
             recent.add(0, Note(sbn.key, sbn.packageName, app, title, text, canReply, System.currentTimeMillis()))
             while (recent.size > 30) recent.removeAt(recent.size - 1)
 
+            // 通知分流：轉送給 PAI 分級（urgent 立刻吵 / normal 每小時摘要 / noise 靜音）
+            // 過濾常駐通知與重複更新（內容指紋 60s 去重）；每小時上限 60 則防轟炸
+            if (Prefs(this).notifyTriage && !sbn.isOngoing) {
+                val now = System.currentTimeMillis()
+                val fp = "$app|$title|$text"
+                if (fp != lastForwardFp || now - lastForwardAt > 60_000) {
+                    lastForwardFp = fp; lastForwardAt = now
+                    if (now - forwardWindowStart > 3600_000) { forwardWindowStart = now; forwardCount = 0 }
+                    if (forwardCount < 60) {
+                        forwardCount++
+                        Thread { forwardToPai(app, title, text) }.start()
+                    }
+                }
+            }
+
             // 開車模式：可回覆的訊息類通知 → 主動念出來並問要不要回覆（免手操作）
             // 去重：同一則通知常重複觸發 onNotificationPosted（更新/分組）→ 用「內容指紋」15 秒內不重念
             if (canReply && VoiceEngine.drivingMode.value && VoiceEngine.active.value) {
@@ -81,6 +96,30 @@ class NotificationListener : NotificationListenerService() {
 
     private var lastAnnouncedFp: String? = null
     private var lastAnnouncedAt: Long = 0L
+
+    private var lastForwardFp: String? = null
+    private var lastForwardAt: Long = 0L
+    private var forwardWindowStart: Long = 0L
+    private var forwardCount: Int = 0
+
+    /** 把通知轉送到 PAI /api/notify-triage（分流用）。 */
+    private fun forwardToPai(app: String, title: String, text: String) {
+        try {
+            val p = Prefs(this)
+            if (p.registerToken.isBlank()) return
+            val body = org.json.JSONObject().put("app", app.take(80))
+                .put("title", title.take(200)).put("text", text.take(2000))
+            val c = (java.net.URL(p.paiBase.trimEnd('/') + "/api/notify-triage")
+                .openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "POST"; doOutput = true
+                connectTimeout = 8000; readTimeout = 15000
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("X-Register-Secret", p.registerToken)
+            }
+            c.outputStream.use { it.write(body.toString().toByteArray()) }
+            c.responseCode
+        } catch (_: Throwable) {}
+    }
 
     /** 用通知的快速回覆動作直接回訊息（LINE 等支援 RemoteInput 的通知都可）。 */
     fun reply(key: String, message: String): String {
