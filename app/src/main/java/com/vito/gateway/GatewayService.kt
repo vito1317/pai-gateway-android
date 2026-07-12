@@ -126,6 +126,7 @@ class GatewayService : Service() {
         ImpactSentinel.stop()
         CollisionGuard.stop()
         HealthSentinel.stop()
+        MeetingRecorder.stop()
         try { unlockReceiver?.let { unregisterReceiver(it) } } catch (e: Throwable) {}
         try { server?.stop() } catch (e: Throwable) {}
         try { wakeLock?.release() } catch (e: Throwable) {}

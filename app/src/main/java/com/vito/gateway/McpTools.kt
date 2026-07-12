@@ -50,6 +50,8 @@ object McpTools {
             JSONObject().put("on", b("true=開啟，false=關閉")), JSONArray().put("on"))
         tool("camera_vision", "開/關「鏡頭投影」：打開手機鏡頭，每2秒把畫面推給 AI 看（守望/即時看世界用）。使用者要 AI 自己開鏡頭、看鏡頭、盯著鏡頭時用。lens=back(預設,看世界)|front(自拍)。",
             JSONObject().put("on", b("true=開啟，false=關閉")).put("lens", s("back|front，預設 back")), JSONArray().put("on"))
+        tool("meeting_record", "開/關「會議錄音」：持續錄音並每20秒上傳給 PAI 轉寫成會議逐字稿（結束後伺服器出摘要+待辦）。使用者說「開始記會議/結束會議」時用。",
+            JSONObject().put("on", b("true=開始錄音，false=結束")), JSONArray().put("on"))
         tool("battery_status", "查手機電量與充電狀態。", JSONObject())
         tool("open_app", "開啟手機上的 app（LINE/YouTube/地圖/Chrome/Spotify/設定/相機…，會查實際安裝的 App 模糊比對名稱）。", JSONObject().put("name", s("app 名稱")), JSONArray().put("name"))
         tool("list_apps", "列出手機已安裝、可開啟的 App（顯示名稱＋套件名）。不確定某 App 在不在、或要給使用者選時用。", JSONObject())
@@ -125,6 +127,9 @@ object McpTools {
             "set_volume" -> DeviceTools.setVolume(ctx, args.optInt("percent"))
             "set_brightness" -> DeviceTools.setBrightness(ctx, args.optInt("percent"))
             "vibrate" -> DeviceTools.vibrate(ctx, args.optLong("ms", 500))
+            "meeting_record" -> {
+                if (args.optBoolean("on")) MeetingRecorder.start(ctx) else MeetingRecorder.stop()
+            }
             "camera_vision" -> {
                 val on = args.optBoolean("on")
                 if (on) {
